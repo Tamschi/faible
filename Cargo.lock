@@ -3,16 +3,6 @@
 version = 3
 
 [[package]]
-name = "TODO_CRATE_NAME"
-version = "0.0.1"
-dependencies = [
- "cargo-husky",
- "git_info",
- "version-sync",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -50,6 +40,25 @@ checksum = "b8d976903543e0c48546a91908f21588a680a8c8f984df9a5d69feccb2b2a211"
 dependencies = [
  "cfg-if 0.1.10",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "faible"
+version = "0.0.1"
+dependencies = [
+ "cargo-husky",
+ "faible_proc-macro-definitions",
+ "git_info",
+ "version-sync",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "faible_proc-macro-definitions"
+version = "0.0.1"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -123,9 +132,9 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.26"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a152013215dca273577e18d2bf00fa862b89b24169fb78c4c95aeb07992c9cec"
+checksum = "ec757218438d5fda206afc041538b2f6d889286160d649a86a24d37e1235afd1"
 dependencies = [
  "unicode-xid",
 ]
@@ -143,9 +152,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.9"
+version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d0b9745dc2debf507c8422de05d7226cc1f0644216dfdfead988f9b1ab32a7"
+checksum = "632d02bff7f874a36f33ea8bb416cd484b90cc66c1194b1a1110d067a7013f58"
 dependencies = [
  "proc-macro2",
 ]
@@ -185,9 +194,9 @@ checksum = "bd761ff957cb2a45fbb9ab3da6512de9de55872866160b23c25f1a841e99d29f"
 
 [[package]]
 name = "syn"
-version = "1.0.69"
+version = "1.0.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48fe99c6bd8b1cc636890bcc071842de909d902c81ac7dab53ba33c421ab8ffb"
+checksum = "b683b2b825c8eef438b77c36a06dc262294da3d5a5813fac20da149241dcd44d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -247,9 +256,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-xid"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
+checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
 
 [[package]]
 name = "url"

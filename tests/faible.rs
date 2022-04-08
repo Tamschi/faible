@@ -1,10 +1,17 @@
 use faible::{Descriptor, FieldAccess, View};
 use serde_json::{map::Entry, Map, Number, Value};
+use std::mem;
 use tap::Pipe;
 
 // #[faible(JsonObjectDescriptor, names = "camelCase")]
 pub struct MapInfo {
-	id: MapId,
+	pub id: MapId,
+	pub expanded: BoolValue,
+	pub name: StringValue,
+	pub order: NumberValue,
+	pub parent_id: MapId,
+	pub scroll_x: NumberValue,
+	pub scroll_y: NumberValue,
 }
 
 struct JsonObjectDescriptor;
@@ -12,14 +19,14 @@ impl Descriptor for JsonObjectDescriptor {
 	type Weak = Value;
 	type Strong = Map<String, Value>;
 
-	fn strong(this: &Self::Weak) -> &Self::Strong {
+	fn strong<'a>(&self, this: &'a Self::Weak) -> &'a Self::Strong {
 		match this {
 			Value::Object(strong) => strong,
 			_ => todo!(),
 		}
 	}
 
-	fn strong_mut(this: &mut Self::Weak) -> &mut Self::Strong {
+	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> &'a mut Self::Strong {
 		match this {
 			Value::Object(strong) => strong,
 			_ => todo!(),
@@ -31,6 +38,7 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 	for JsonObjectDescriptor
 {
 	fn get<'a>(
+		&self,
 		this: &'a <JsonObjectDescriptor as Descriptor>::Strong,
 		name: &'static str,
 	) -> faible::Result<&'a T> {
@@ -38,6 +46,7 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 	}
 
 	fn get_mut<'a>(
+		&self,
 		this: &'a mut <JsonObjectDescriptor as Descriptor>::Strong,
 		name: &'static str,
 	) -> faible::Result<&'a mut T> {
@@ -45,6 +54,7 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 	}
 
 	fn set(
+		&self,
 		this: &mut <JsonObjectDescriptor as Descriptor>::Strong,
 		name: &'static str,
 		value: T,
@@ -52,51 +62,39 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 	where
 		T: Sized,
 	{
-		this[name] = value.into_inner();
+		let value = value.into_inner();
+		match this.entry(name) {
+			Entry::Vacant(vacant) => vacant.insert(value).pipe(drop),
+			Entry::Occupied(occupied) => *occupied.into_mut() = value,
+		}
 		Ok(())
 	}
 
 	fn insert<'a>(
+		&self,
 		this: &'a mut <JsonObjectDescriptor as Descriptor>::Strong,
 		name: &'static str,
 		value: T,
-	) -> faible::Result<&'a mut T>
+	) -> faible::Result<(&'a mut T, Option<T>)>
 	where
 		T: Sized,
 	{
 		let value = value.into_inner();
 		match this.entry(name) {
-			Entry::Vacant(vacant) => vacant.insert(value),
+			Entry::Vacant(vacant) => (vacant.insert(value), None),
 			Entry::Occupied(occupied) => {
 				let slot = occupied.into_mut();
-				*slot = value;
-				slot
+				let prev = mem::replace(slot, value);
+				(slot, Some(prev))
 			}
 		}
-		.pipe(T::from_mut)
-		.pipe(Ok)
-	}
-
-	fn replace(
-		this: &mut <JsonObjectDescriptor as Descriptor>::Strong,
-		name: &'static str,
-		value: T,
-	) -> faible::Result<Option<T>>
-	where
-		T: Sized,
-	{
-		let value = value.into_inner();
-		match this.entry(name) {
-			Entry::Vacant(vacant) => {
-				vacant.insert(value);
-				None
-			}
-			Entry::Occupied(mut occupied) => occupied.insert(value).pipe(Some),
-		}
-		.map(T::from)
+		.pipe(T::from_insertion)
 		.pipe(Ok)
 	}
 }
 
 // #[faible(MapIdDescriptor)]
 pub struct MapId;
+pub struct BoolValue;
+pub struct StringValue;
+pub struct NumberValue;

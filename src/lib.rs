@@ -16,14 +16,14 @@ pub struct Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 pub trait Faible {
-	fn validate() -> Result<()>;
+	fn validate(&self) -> Result<()>;
 }
 
 pub trait Descriptor {
 	type Weak;
 	type Strong;
-	fn strong(this: &Self::Weak) -> &Self::Strong;
-	fn strong_mut(this: &mut Self::Weak) -> &mut Self::Strong;
+	fn strong<'a>(&self, this: &'a Self::Weak) -> &'a Self::Strong;
+	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> &'a mut Self::Strong;
 }
 
 /// # Safety
@@ -67,18 +67,23 @@ pub unsafe trait View<T: ?Sized> {
 				.read()
 		}
 	}
+
+	fn from_insertion((slot, prev): (&mut T, Option<T>)) -> (&mut Self, Option<Self>)
+	where
+		Self: Sized,
+		T: Sized,
+	{
+		(Self::from_mut(slot), prev.map(Self::from))
+	}
 }
 
 pub trait FieldAccess<This: ?Sized, T: ?Sized, N> {
-	fn get<'a>(this: &'a This, name: N) -> Result<&'a T>;
-	fn get_mut<'a>(this: &'a mut This, name: N) -> Result<&'a mut T>;
-	fn set<'a>(this: &'a mut This, name: N, value: T) -> Result<()>
+	fn get<'a>(&self, this: &'a This, name: N) -> Result<&'a T>;
+	fn get_mut<'a>(&self, this: &'a mut This, name: N) -> Result<&'a mut T>;
+	fn set(&self, this: &mut This, name: N, value: T) -> Result<()>
 	where
 		T: Sized;
-	fn insert<'a>(this: &'a mut This, name: N, value: T) -> Result<&'a mut T>
-	where
-		T: Sized;
-	fn replace<'a>(this: &'a mut This, name: N, value: T) -> Result<Option<T>>
+	fn insert<'a>(&self, this: &'a mut This, name: N, value: T) -> Result<(&'a mut T, Option<T>)>
 	where
 		T: Sized;
 }

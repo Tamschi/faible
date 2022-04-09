@@ -62,7 +62,9 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 		this: &'a <JsonObjectDescriptor as Descriptor>::Strong,
 		name: &'static str,
 	) -> faible::Result<&'a T> {
-		this.get(name).map(T::from_ref).ok_or_else(|| todo!())
+		this.get(name)
+			.map(T::from_ref)
+			.ok_or_else(|| Error::new(format!("Expected field {name} in {}.", self.0)))
 	}
 
 	fn get_mut<'a>(
@@ -70,7 +72,9 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 		this: &'a mut <JsonObjectDescriptor as Descriptor>::Strong,
 		name: &'static str,
 	) -> faible::Result<&'a mut T> {
-		this.get_mut(name).map(T::from_mut).ok_or_else(|| todo!())
+		this.get_mut(name)
+			.map(T::from_mut)
+			.ok_or_else(|| Error::new(format!("Expected field {name} in {}.", self.0)))
 	}
 
 	fn set(

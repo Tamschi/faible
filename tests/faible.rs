@@ -32,9 +32,23 @@ impl Descriptor for JsonObjectDescriptor {
 	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
 		match this {
 			Value::Object(strong) => Ok(strong),
-			_ => Err(Error::new(format!(
+			this => Err(Error::new(format!(
 				"{} is expected to be an object, but was {:?}.",
 				self.0, &this
+			))),
+		}
+	}
+
+	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak {
+		Value::Object(strong)
+	}
+
+	fn try_weak_into_strong(&self, weak: Self::Weak) -> faible::Result<Self::Strong> {
+		match weak {
+			Value::Object(strong) => Ok(strong),
+			weak => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, weak
 			))),
 		}
 	}
@@ -99,13 +113,13 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 	}
 }
 
-#[faible(JsonNumberDescriptor)]
+#[faible(JsonNumberDescriptor("MapId"))]
 pub struct MapId;
-#[faible(JsonBoolDescriptor)]
+#[faible(JsonBoolDescriptor("BoolValue"))]
 pub struct BoolValue;
-#[faible(JsonStringDescriptor)]
+#[faible(JsonStringDescriptor("StringValue"))]
 pub struct StringValue;
-#[faible(JsonNumberDescriptor)]
+#[faible(JsonNumberDescriptor("NumberValue"))]
 pub struct NumberValue;
 
 pub struct JsonNumberDescriptor(&'static str);
@@ -117,7 +131,7 @@ impl Descriptor for JsonNumberDescriptor {
 		match this {
 			Value::Number(number) => Ok(number),
 			this => Err(Error::new(format!(
-				"{} is expected to be an object, but was {:?}.",
+				"{} is expected to be a number, but was {:?}.",
 				self.0, &this
 			))),
 		}
@@ -127,8 +141,22 @@ impl Descriptor for JsonNumberDescriptor {
 		match this {
 			Value::Number(number) => Ok(number),
 			this => Err(Error::new(format!(
-				"{} is expected to be an object, but was {:?}.",
+				"{} is expected to be a number, but was {:?}.",
 				self.0, &this
+			))),
+		}
+	}
+
+	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak {
+		Value::Number(strong)
+	}
+
+	fn try_weak_into_strong(&self, weak: Self::Weak) -> faible::Result<Self::Strong> {
+		match weak {
+			Value::Number(strong) => Ok(strong),
+			weak => Err(Error::new(format!(
+				"{} is expected to be a number, but was {:?}.",
+				self.0, weak
 			))),
 		}
 	}
@@ -143,7 +171,7 @@ impl Descriptor for JsonBoolDescriptor {
 		match this {
 			Value::Bool(bool) => Ok(bool),
 			this => Err(Error::new(format!(
-				"{} is expected to be an object, but was {:?}.",
+				"{} is expected to be a bool, but was {:?}.",
 				self.0, &this
 			))),
 		}
@@ -158,6 +186,20 @@ impl Descriptor for JsonBoolDescriptor {
 			))),
 		}
 	}
+
+	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak {
+		Value::Bool(strong)
+	}
+
+	fn try_weak_into_strong(&self, weak: Self::Weak) -> faible::Result<Self::Strong> {
+		match weak {
+			Value::Bool(strong) => Ok(strong),
+			weak => Err(Error::new(format!(
+				"{} is expected to be a bool, but was {:?}.",
+				self.0, weak
+			))),
+		}
+	}
 }
 
 pub struct JsonStringDescriptor(&'static str);
@@ -169,7 +211,7 @@ impl Descriptor for JsonStringDescriptor {
 		match this {
 			Value::String(string) => Ok(string),
 			this => Err(Error::new(format!(
-				"{} is expected to be an object, but was {:?}.",
+				"{} is expected to be a string, but was {:?}.",
 				self.0, &this
 			))),
 		}
@@ -179,8 +221,22 @@ impl Descriptor for JsonStringDescriptor {
 		match this {
 			Value::String(string) => Ok(string),
 			this => Err(Error::new(format!(
-				"{} is expected to be an object, but was {:?}.",
+				"{} is expected to be a string, but was {:?}.",
 				self.0, &this
+			))),
+		}
+	}
+
+	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak {
+		Value::String(strong)
+	}
+
+	fn try_weak_into_strong(&self, weak: Self::Weak) -> faible::Result<Self::Strong> {
+		match weak {
+			Value::String(strong) => Ok(strong),
+			weak => Err(Error::new(format!(
+				"{} is expected to be a string, but was {:?}.",
+				self.0, weak
 			))),
 		}
 	}

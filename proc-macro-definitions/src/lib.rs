@@ -153,6 +153,49 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		#[repr(transparent)]
 		#vis #struct_token #ident #generics #fields #where_ #semicolon
 
+		#[automatically_derived]
+		impl #impl_generics #faible::Faible for #ident #type_generics #impl_where {
+			type Descriptor = #descriptor_type;
+
+			fn as_strong(&self) -> #faible::Result<&<Self::Descriptor as #faible::Descriptor>::Strong> {
+				#faible::Descriptor::strong(&#descriptor, &self.0)
+			}
+
+			fn as_strong_mut(&mut self) -> #faible::Result<&mut <Self::Descriptor as #faible::Descriptor>::Strong> {
+				#faible::Descriptor::strong_mut(&#descriptor, &mut self.0)
+			}
+		}
+
+		#[automatically_derived]
+		impl #impl_generics core::convert::From<<#descriptor_type as #faible::Descriptor>::Weak> for #ident #type_generics #impl_where {
+			fn from(value: <#descriptor_type as #faible::Descriptor>::Weak) -> Self {
+				Self(value)
+			}
+		}
+
+		#[automatically_derived]
+		impl #impl_generics core::convert::From<<#descriptor_type as #faible::Descriptor>::Strong> for #ident #type_generics #impl_where {
+			fn from(value: <#descriptor_type as #faible::Descriptor>::Strong) -> Self {
+				Self(#faible::Descriptor::strong_into_weak(&#descriptor, value))
+			}
+		}
+
+		#[automatically_derived]
+		impl #impl_generics core::convert::From<#ident #type_generics> for <#descriptor_type as #faible::Descriptor>::Weak #impl_where {
+			fn from(value: #ident #type_generics) -> Self {
+				value.0
+			}
+		}
+
+		#[automatically_derived]
+		impl #impl_generics core::convert::TryFrom<#ident #type_generics> for <#descriptor_type as #faible::Descriptor>::Strong #impl_where {
+			type Error = #faible::Error;
+
+			fn try_from(value: #ident #type_generics) -> #faible::Result<Self> {
+				#faible::Result::Ok(#faible::Descriptor::try_weak_into_strong(&#descriptor, value.0)?)
+			}
+		}
+
 		/// # Safety
 		///
 		/// Automatically implemented by [faible](https://github.com/Tamschi/faible#readme).

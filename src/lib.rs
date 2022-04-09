@@ -24,7 +24,10 @@ impl Error {
 }
 
 pub trait Faible {
-	fn validate(&self) -> Result<()>;
+	type Descriptor: Descriptor;
+
+	fn as_strong(&self) -> Result<&<Self::Descriptor as Descriptor>::Strong>;
+	fn as_strong_mut(&mut self) -> Result<&mut <Self::Descriptor as Descriptor>::Strong>;
 }
 
 pub trait Descriptor {
@@ -32,6 +35,8 @@ pub trait Descriptor {
 	type Strong;
 	fn strong<'a>(&self, this: &'a Self::Weak) -> Result<&'a Self::Strong>;
 	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> Result<&'a mut Self::Strong>;
+	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak;
+	fn try_weak_into_strong(&self, weak: Self::Weak) -> Result<Self::Strong>;
 }
 
 /// # Safety

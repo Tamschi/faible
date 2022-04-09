@@ -6,7 +6,10 @@
 #![warn(clippy::pedantic, missing_docs)]
 #![allow(clippy::semicolon_if_nothing_returned)]
 
-use std::mem::{ManuallyDrop, MaybeUninit};
+use std::{
+	fmt::{self, Display, Formatter},
+	mem::{ManuallyDrop, MaybeUninit},
+};
 
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
@@ -14,14 +17,23 @@ mod readme {}
 
 pub use faible_proc_macro_definitions::faible;
 
+#[derive(Debug)]
 pub struct Error(String);
 pub type Result<T> = core::result::Result<T, Error>;
 
 impl Error {
+	#[must_use]
 	pub fn new(message: String) -> Error {
 		Self(message)
 	}
 }
+
+impl Display for Error {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", &self.0)
+	}
+}
+impl std::error::Error for Error {}
 
 pub trait Faible {
 	type Descriptor: Descriptor;

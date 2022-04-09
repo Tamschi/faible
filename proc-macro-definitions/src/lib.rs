@@ -15,6 +15,7 @@ use syn::{
 	Attribute, Error, Expr, Field, Generics, Item, ItemStruct, LitStr, Path, Result, Token,
 	Visibility,
 };
+use tap::Pipe;
 
 #[proc_macro_attribute]
 pub fn faible(args: TokenStream1, input: TokenStream1) -> TokenStream1 {
@@ -135,7 +136,28 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		match call2_allow_incomplete(quote_spanned!(Span::mixed_site()=> #descriptor), |input| {
 			input.parse::<Path>()
 		}) {
-			Ok(path) => path,
+			Ok(mut path) => {
+				if path.segments.len() > 1 {
+					let last_ident_string =
+						path.segments.last().expect("unreachable").ident.to_string();
+					if last_ident_string
+						.strip_prefix("r#")
+						.unwrap_or(&last_ident_string)
+						.chars()
+						.next()
+						.expect("This *should* be non-empty.")
+						.is_ascii_lowercase()
+					{
+						path.segments.pop().expect("unreachable");
+						path.segments
+							.pop()
+							.expect("unreachable")
+							.into_value()
+							.pipe(|segment| path.segments.push(segment));
+					}
+				}
+				path
+			}
 			Err(error) => {
 				errors.push(error);
 				parse_quote_spanned!(descriptor.span()=> __faible__UnknownType)

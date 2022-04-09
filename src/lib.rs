@@ -6,7 +6,7 @@
 #![warn(clippy::pedantic, missing_docs)]
 #![allow(clippy::semicolon_if_nothing_returned)]
 
-use std::mem::{self, ManuallyDrop, MaybeUninit};
+use std::mem::{ManuallyDrop, MaybeUninit};
 
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]

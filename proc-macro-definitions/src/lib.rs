@@ -204,7 +204,7 @@ fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
 					attrs,
 					vis,
 					ident,
-					colon_token,
+					colon_token: _,
 					ty,
 				},
 			)| {

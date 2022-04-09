@@ -12,6 +12,8 @@ use std::mem::{self, ManuallyDrop, MaybeUninit};
 #[doc = include_str!("../README.md")]
 mod readme {}
 
+pub use faible_proc_macro_definitions::faible;
+
 pub struct Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -22,8 +24,8 @@ pub trait Faible {
 pub trait Descriptor {
 	type Weak;
 	type Strong;
-	fn strong<'a>(&self, this: &'a Self::Weak) -> &'a Self::Strong;
-	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> &'a mut Self::Strong;
+	fn strong<'a>(&self, this: &'a Self::Weak) -> Result<&'a Self::Strong>;
+	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> Result<&'a mut Self::Strong>;
 }
 
 /// # Safety

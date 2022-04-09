@@ -1,9 +1,9 @@
-use faible::{Descriptor, FieldAccess, View};
+use faible::{faible, Descriptor, FieldAccess, View};
 use serde_json::{map::Entry, Map, Number, Value};
 use std::mem;
 use tap::Pipe;
 
-// #[faible(JsonObjectDescriptor, names = "camelCase")]
+#[faible(JsonObjectDescriptor, faible = ::faible, names = "lowerCamelCase")]
 pub struct MapInfo {
 	pub id: MapId,
 	pub expanded: BoolValue,
@@ -14,21 +14,21 @@ pub struct MapInfo {
 	pub scroll_y: NumberValue,
 }
 
-struct JsonObjectDescriptor;
+pub struct JsonObjectDescriptor;
 impl Descriptor for JsonObjectDescriptor {
 	type Weak = Value;
 	type Strong = Map<String, Value>;
 
-	fn strong<'a>(&self, this: &'a Self::Weak) -> &'a Self::Strong {
+	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
 		match this {
-			Value::Object(strong) => strong,
+			Value::Object(strong) => Ok(strong),
 			_ => todo!(),
 		}
 	}
 
-	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> &'a mut Self::Strong {
+	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
 		match this {
-			Value::Object(strong) => strong,
+			Value::Object(strong) => Ok(strong),
 			_ => todo!(),
 		}
 	}
@@ -93,8 +93,71 @@ impl<T: View<Value>> FieldAccess<<JsonObjectDescriptor as Descriptor>::Strong, T
 	}
 }
 
-// #[faible(MapIdDescriptor)]
+#[faible(JsonNumberDescriptor)]
 pub struct MapId;
+#[faible(JsonBoolDescriptor)]
 pub struct BoolValue;
+#[faible(JsonStringDescriptor)]
 pub struct StringValue;
+#[faible(JsonNumberDescriptor)]
 pub struct NumberValue;
+
+pub struct JsonNumberDescriptor;
+impl Descriptor for JsonNumberDescriptor {
+	type Weak = Value;
+	type Strong = Number;
+
+	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
+		match this {
+			Value::Number(number) => Ok(number),
+			_ => todo!(),
+		}
+	}
+
+	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
+		match this {
+			Value::Number(number) => Ok(number),
+			_ => todo!(),
+		}
+	}
+}
+
+pub struct JsonBoolDescriptor;
+impl Descriptor for JsonBoolDescriptor {
+	type Weak = Value;
+	type Strong = bool;
+
+	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
+		match this {
+			Value::Bool(bool) => Ok(bool),
+			_ => todo!(),
+		}
+	}
+
+	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
+		match this {
+			Value::Bool(bool) => Ok(bool),
+			_ => todo!(),
+		}
+	}
+}
+
+pub struct JsonStringDescriptor;
+impl Descriptor for JsonStringDescriptor {
+	type Weak = Value;
+	type Strong = String;
+
+	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
+		match this {
+			Value::String(string) => Ok(string),
+			_ => todo!(),
+		}
+	}
+
+	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
+		match this {
+			Value::String(string) => Ok(string),
+			_ => todo!(),
+		}
+	}
+}

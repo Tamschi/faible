@@ -90,6 +90,11 @@ pub unsafe trait View<T: ?Sized> {
 	}
 }
 
+/// # Safety
+///
+/// This is the identity pun.
+unsafe impl<T: ?Sized> View<T> for T {}
+
 pub trait FieldAccess<This: ?Sized, T: ?Sized, N> {
 	fn get<'a>(&self, this: &'a This, name: N) -> Result<&'a T>;
 	fn get_mut<'a>(&self, this: &'a mut This, name: N) -> Result<&'a mut T>;

@@ -261,6 +261,7 @@ fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
 				};
 				let get_mut = Ident::new(&format!("{get}_mut"), ident.span());
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
+				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
 				let name = make_name(&ident, names);
 
@@ -284,6 +285,13 @@ fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::FieldAccess::set(&descriptor, strong, #name, value)
+					}
+
+					#(#attrs)*
+					#vis fn #insert(&mut self, value: #ty) -> #faible::Result<(&mut #ty, ::core::option::Option<#ty>)> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
+						#faible::FieldAccess::insert(&descriptor, strong, #name, value)
 					}
 				}
 			},

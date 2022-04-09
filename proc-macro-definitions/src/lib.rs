@@ -208,11 +208,9 @@ fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
 					ty,
 				},
 			)| {
-				let mut buffer = Buffer::new();
-				let ident = ident.unwrap_or_else(|| Ident::new(buffer.format(i), ty.span()));
-				let colon_token = colon_token.unwrap_or_else(|| Token![:](ty.span()));
-
+				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(i), ty.span()));
 				let ident_string = ident.to_string();
+
 				let get = if ident_string.starts_with(|c: char| c.is_ascii_digit()) {
 					Ident::new(&format!("get_{ident_string}"), ident.span())
 				} else {

@@ -1,9 +1,9 @@
-use faible::{faible, Descriptor, FieldAccess, View};
+use faible::{faible, Descriptor, Error, FieldAccess, View};
 use serde_json::{map::Entry, Map, Number, Value};
 use std::mem;
 use tap::Pipe;
 
-#[faible(JsonObjectDescriptor, faible = ::faible, names = "lowerCamelCase")]
+#[faible(JsonObjectDescriptor("MapInfo"), faible = ::faible, names = "lowerCamelCase")]
 pub struct MapInfo {
 	pub id: MapId,
 	pub expanded: BoolValue,
@@ -14,7 +14,7 @@ pub struct MapInfo {
 	pub scroll_y: NumberValue,
 }
 
-pub struct JsonObjectDescriptor;
+pub struct JsonObjectDescriptor(&'static str);
 impl Descriptor for JsonObjectDescriptor {
 	type Weak = Value;
 	type Strong = Map<String, Value>;
@@ -22,14 +22,20 @@ impl Descriptor for JsonObjectDescriptor {
 	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
 		match this {
 			Value::Object(strong) => Ok(strong),
-			_ => todo!(),
+			this => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 
 	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
 		match this {
 			Value::Object(strong) => Ok(strong),
-			_ => todo!(),
+			_ => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 }
@@ -102,7 +108,7 @@ pub struct StringValue;
 #[faible(JsonNumberDescriptor)]
 pub struct NumberValue;
 
-pub struct JsonNumberDescriptor;
+pub struct JsonNumberDescriptor(&'static str);
 impl Descriptor for JsonNumberDescriptor {
 	type Weak = Value;
 	type Strong = Number;
@@ -110,19 +116,25 @@ impl Descriptor for JsonNumberDescriptor {
 	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
 		match this {
 			Value::Number(number) => Ok(number),
-			_ => todo!(),
+			this => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 
 	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
 		match this {
 			Value::Number(number) => Ok(number),
-			_ => todo!(),
+			this => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 }
 
-pub struct JsonBoolDescriptor;
+pub struct JsonBoolDescriptor(&'static str);
 impl Descriptor for JsonBoolDescriptor {
 	type Weak = Value;
 	type Strong = bool;
@@ -130,19 +142,25 @@ impl Descriptor for JsonBoolDescriptor {
 	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
 		match this {
 			Value::Bool(bool) => Ok(bool),
-			_ => todo!(),
+			this => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 
 	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
 		match this {
 			Value::Bool(bool) => Ok(bool),
-			_ => todo!(),
+			this => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 }
 
-pub struct JsonStringDescriptor;
+pub struct JsonStringDescriptor(&'static str);
 impl Descriptor for JsonStringDescriptor {
 	type Weak = Value;
 	type Strong = String;
@@ -150,14 +168,20 @@ impl Descriptor for JsonStringDescriptor {
 	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
 		match this {
 			Value::String(string) => Ok(string),
-			_ => todo!(),
+			this => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 
 	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
 		match this {
 			Value::String(string) => Ok(string),
-			_ => todo!(),
+			this => Err(Error::new(format!(
+				"{} is expected to be an object, but was {:?}.",
+				self.0, &this
+			))),
 		}
 	}
 }

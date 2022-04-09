@@ -1,3 +1,4 @@
+use call2_for_syn::call2_allow_incomplete;
 use heck::{
 	ToKebabCase, ToLowerCamelCase, ToPascalCase, ToShoutyKebabCase, ToShoutySnakeCase,
 	ToShoutySnekCase, ToSnakeCase, ToSnekCase, ToTitleCase, ToUpperCamelCase,
@@ -130,8 +131,19 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		names: _,
 	} = args;
 
+	let descriptor_type =
+		match call2_allow_incomplete(quote_spanned!(Span::mixed_site()=> #descriptor), |input| {
+			input.parse::<Path>()
+		}) {
+			Ok(path) => path,
+			Err(error) => {
+				errors.push(error);
+				parse_quote_spanned!(descriptor.span()=> __faible__UnknownType)
+			}
+		};
+
 	let fields = quote_spanned! {fields_span.resolved_at(Span::mixed_site())=>
-		(pub <#descriptor as #faible::Descriptor>::Weak)
+		(pub <#descriptor_type as #faible::Descriptor>::Weak)
 	};
 
 	let where_ = generics.where_clause.as_ref();
@@ -145,7 +157,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		///
 		/// Automatically implemented by [faible](https://github.com/Tamschi/faible#readme).
 		#[automatically_derived]
-		unsafe impl #impl_generics #faible::View<<#descriptor as #faible::Descriptor>::Weak> for #ident #type_generics #impl_where {}
+		unsafe impl #impl_generics #faible::View<<#descriptor_type as #faible::Descriptor>::Weak> for #ident #type_generics #impl_where {}
 
 		#[automatically_derived]
 		impl #impl_generics #ident #type_generics #impl_where {
@@ -212,18 +224,21 @@ fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
 				let name = make_name(&ident, names);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
+					#(#attrs)*
 					#vis fn #get(&self) -> #faible::Result<&#ty> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong(&descriptor, &self.0)?;
 						#faible::FieldAccess::get(&descriptor, strong, #name)
 					}
 
+					#(#attrs)*
 					#vis fn #get_mut(&mut self) -> #faible::Result<&mut #ty> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::FieldAccess::get_mut(&descriptor, strong, #name)
 					}
 
+					#(#attrs)*
 					#vis fn #set(&mut self, value: #ty) -> #faible::Result<()> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;

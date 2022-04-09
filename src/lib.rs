@@ -14,8 +14,14 @@ mod readme {}
 
 pub use faible_proc_macro_definitions::faible;
 
-pub struct Error;
+pub struct Error(String);
 pub type Result<T> = core::result::Result<T, Error>;
+
+impl Error {
+	pub fn new(message: String) -> Error {
+		Self(message)
+	}
+}
 
 pub trait Faible {
 	fn validate(&self) -> Result<()>;

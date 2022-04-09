@@ -28,11 +28,12 @@ is-it-maintained-open-issues = { repository = "Tamschi/faible" }
 maintenance = { status = "experimental" } # This may differ between branches.
 
 [dependencies]
+call2-for-syn = "2.0.3"
 heck = "0.4.0"
 itoa = "1.0.1"
 proc-macro2 = "1.0.37"
 quote = "1.0.17"
-syn = { version = "1.0.91", features = ["visit-mut"] }
+syn = { version = "1.0.91", features = ["full", "visit-mut"] }
 tap = "1.0.1"
 
 [dev-dependencies]

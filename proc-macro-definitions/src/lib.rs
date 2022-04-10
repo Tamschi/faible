@@ -379,7 +379,7 @@ Replaced literals are: "kebab_case", "lowerCamelCase", "PascalCase", "SHOUTY_KEB
 					"UpperCamelCase" => name.to_upper_camel_case(),
 					"verbatim" => name,
 					"__faible__name_required" => {
-						self.1.push(Error::new(i.span(), "A field name expression is required. (`#[faible(…, names = <expr>)]`, try identifiers and string literals for more information.)"));
+						self.1.push(Error::new(self.0.span(), "A field name expression is required. (`#[faible(…, names = <expr>)]`, try identifiers and string literals for more information.)"));
 						*i = Ident::new(
 							"__faible__name_required",
 							self.0.span().resolved_at(Span::mixed_site()),

@@ -46,7 +46,7 @@ impl Default for Args {
 		Self {
 			descriptor: parse_quote_spanned! {Span::mixed_site()=> ()},
 			faible: parse_quote_spanned! {Span::mixed_site()=> ::faible},
-			names: parse_quote_spanned! {Span::mixed_site()=> "verbatim"},
+			names: parse_quote_spanned! {Span::mixed_site()=> __faible__name_required},
 		}
 	}
 }
@@ -116,7 +116,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		semicolon,
 	} = match input {
 		Item::Enum(_) => todo!(),
-		Item::Struct(struct_) => process_struct(struct_, &args),
+		Item::Struct(struct_) => process_struct(struct_, &args, errors),
 		_ => {
 			errors.push(Error::new(
 				Span::mixed_site(),
@@ -242,7 +242,7 @@ struct Processed {
 	semicolon: Token![;],
 }
 
-fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
+fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> Processed {
 	let Args {
 		descriptor,
 		faible,
@@ -285,7 +285,7 @@ fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
 				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
-				let name = make_name(&ident, names);
+				let name = make_name(&ident, names, errors);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
@@ -332,8 +332,8 @@ fn process_struct(struct_: ItemStruct, args: &Args) -> Processed {
 	}
 }
 
-fn make_name(ident: &Ident, names: &Expr) -> Expr {
-	struct NameVisitor<'a>(&'a Ident);
+fn make_name(ident: &Ident, names: &Expr, errors: &mut Vec<Error>) -> Expr {
+	struct NameVisitor<'a>(&'a Ident, &'a mut Vec<Error>);
 	impl VisitMut for NameVisitor<'_> {
 		fn visit_lit_str_mut(&mut self, i: &mut syn::LitStr) {
 			let name = self.0.to_string();
@@ -350,11 +350,14 @@ fn make_name(ident: &Ident, names: &Expr) -> Expr {
 					"Title Case" => name.to_title_case(),
 					"UpperCamelCase" => name.to_upper_camel_case(),
 					"verbatim" => name,
-					name if name.starts_with("literally") => name
-						.strip_prefix("literally")
-						.expect("unreachable")
-						.to_string(),
-					_ => return,
+					name if name.starts_with('_') => {
+						name.strip_prefix('_').expect("unreachable").to_string()
+					}
+					_ => {
+						self.1.push(Error::new(i.span(), r#"Unrecognised name string literal. (Prefix its value with `_` to use it literally.)
+Replaced literals are: "kebab_case", "lowerCamelCase", "PascalCase", "SHOUTY_KEBAB_CASE", "SHOUTY_SNAKE_CASE", "SHOUTY_SNEK_CASE", "snake_case", "snek_case", "Title_Case", "UpperCamelCase", "verbatim"."#));
+						return;
+					}
 				},
 				self.0.span(),
 			);
@@ -375,11 +378,22 @@ fn make_name(ident: &Ident, names: &Expr) -> Expr {
 					"Title_Case" => name.to_title_case(),
 					"UpperCamelCase" => name.to_upper_camel_case(),
 					"verbatim" => name,
-					name if name.starts_with("literally") => name
-						.strip_prefix("literally")
-						.expect("unreachable")
-						.to_string(),
-					_ => return,
+					"__faible__name_required" => {
+						self.1.push(Error::new(i.span(), "A field name expression is required. (`#[faible(…, names = <expr>)]`, try identifiers and string literals for more information.)"));
+						*i = Ident::new(
+							"__faible__name_required",
+							self.0.span().resolved_at(Span::mixed_site()),
+						);
+						return;
+					}
+					name if name.starts_with('_') => {
+						name.strip_prefix('_').expect("unreachable").to_string()
+					}
+					_ => {
+						self.1.push(Error::new(i.span(), "Unrecognised name identifier. (Prefix it with `_` to use it literally.)
+Replaced identifiers are: `kebab_case`, `lowerCamelCase`, `PascalCase`, `SHOUTY_KEBAB_CASE`, `SHOUTY_SNAKE_CASE`, `SHOUTY_SNEK_CASE`, `snake_case`, `snek_case`, `Title_Case`, `UpperCamelCase`, `verbatim`."));
+						return;
+					}
 				},
 				self.0.span(),
 			);
@@ -387,7 +401,7 @@ fn make_name(ident: &Ident, names: &Expr) -> Expr {
 	}
 
 	let mut name = names.clone();
-	NameVisitor(ident).visit_expr_mut(&mut name);
+	NameVisitor(ident, errors).visit_expr_mut(&mut name);
 	name
 }
 

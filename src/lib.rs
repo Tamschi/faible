@@ -118,6 +118,17 @@ pub trait FieldAccess<Strong: ?Sized, T: ?Sized, N> {
 		T: Sized;
 }
 
+pub trait UnionFieldAccess<Strong: ?Sized, T: ?Sized, N> {
+	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<Option<&'a T>>;
+	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<Option<&'a mut T>>;
+	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<()>
+	where
+		T: Sized;
+	fn insert<'a>(&self, strong: &'a mut Strong, name: N, value: T) -> Result<(&'a mut T, Option<T>)>
+	where
+		T: Sized;
+}
+
 pub trait VariantFilter<Strong: ?Sized, N> {
 	fn predicate(&self, strong: &Strong, name: N) -> Result<bool>;
 }

@@ -12,8 +12,8 @@ use syn::{
 	parse_quote_spanned,
 	spanned::Spanned,
 	visit_mut::VisitMut,
-	Attribute, Error, Expr, Field, Generics, Item, ItemStruct, LitStr, Path, Result, Token,
-	Visibility,
+	Attribute, Error, Expr, Field, Generics, Item, ItemStruct, ItemUnion, LitStr, Path, Result,
+	Token, Visibility,
 };
 use tap::Pipe;
 
@@ -117,6 +117,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 	} = match input {
 		Item::Enum(_) => todo!(),
 		Item::Struct(struct_) => process_struct(struct_, &args, errors),
+		Item::Union(union) => process_union(union, &args, errors),
 		_ => {
 			errors.push(Error::new(
 				Span::mixed_site(),
@@ -329,6 +330,95 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 		fields_span,
 		methods,
 		semicolon: semi_token.unwrap_or_else(|| Token![;](fields_span)),
+	}
+}
+
+fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Processed {
+	let Args {
+		descriptor,
+		faible,
+		names,
+	} = args;
+	let ItemUnion {
+		attrs,
+		vis,
+		union_token,
+		ident,
+		generics,
+		fields,
+	} = union;
+
+	let methods = fields
+		.named
+		.into_iter()
+		.enumerate()
+		.map(
+			|(
+				i,
+				Field {
+					attrs,
+					vis,
+					ident,
+					colon_token: _,
+					ty,
+				},
+			)| {
+				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(i), ty.span()));
+				let ident_string = ident.to_string();
+
+				let get = if ident_string.starts_with(|c: char| c.is_ascii_digit()) {
+					Ident::new(&format!("get_{ident_string}"), ident.span())
+				} else {
+					ident.clone()
+				};
+				let get_mut = Ident::new(&format!("{get}_mut"), ident.span());
+				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
+				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
+
+				let name = make_name(&ident, names, errors);
+
+				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
+					#(#attrs)*
+					#vis fn #get(&self) -> #faible::Result<Option<&#ty>> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong(&descriptor, &self.0)?;
+						#faible::UnionFieldAccess::get(&descriptor, strong, #name)
+					}
+
+					#(#attrs)*
+					#vis fn #get_mut(&mut self) -> #faible::Result<Option<&mut #ty>> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
+						#faible::UnionFieldAccess::get_mut(&descriptor, strong, #name)
+					}
+
+					#(#attrs)*
+					#vis fn #set(&mut self, value: #ty) -> #faible::Result<()> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
+						#faible::UnionFieldAccess::set(&descriptor, strong, #name, value)
+					}
+
+					#(#attrs)*
+					#vis fn #insert(&mut self, value: #ty) -> #faible::Result<(&mut #ty, ::core::option::Option<#ty>)> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
+						#faible::UnionFieldAccess::insert(&descriptor, strong, #name, value)
+					}
+				}
+			},
+		)
+		.collect();
+
+	Processed {
+		attrs,
+		vis,
+		struct_token: Token![struct](union_token.span),
+		ident,
+		generics,
+		fields_span: fields.brace_token.span,
+		methods,
+		semicolon: Token![;](fields.brace_token.span),
 	}
 }
 

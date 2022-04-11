@@ -1,10 +1,11 @@
-use std::{any::Any, marker::PhantomData, ptr::NonNull};
+use std::{any::Any, marker::PhantomData, mem, ptr::NonNull};
 
 use faible::{faible, Descriptor, UnionFieldAccess};
 
 #[faible(NullableDescriptor::<T>::new(), names = "_unused")]
 pub union Nullable<T: 'static + ?Sized> {
-	pub value: NonNull<T>,
+	pub non_null: NonNull<T>,
+	pub raw: *mut T,
 }
 
 pub struct NullableDescriptor<T: ?Sized>(PhantomData<T>);
@@ -65,5 +66,40 @@ impl<T: ?Sized, N> UnionFieldAccess<*mut T, NonNull<T>, N> for NullableDescripto
 		NonNull<T>: Sized,
 	{
 		unimplemented!()
+	}
+}
+
+impl<T: ?Sized, N> UnionFieldAccess<*mut T, *mut T, N> for NullableDescriptor<T> {
+	fn get<'a>(&self, strong: &'a *mut T, name: N) -> faible::Result<Option<&'a *mut T>> {
+		Ok(Some(strong))
+	}
+
+	fn get_mut<'a>(
+		&self,
+		strong: &'a mut *mut T,
+		name: N,
+	) -> faible::Result<Option<&'a mut *mut T>> {
+		Ok(Some(strong))
+	}
+
+	fn set(&self, strong: &mut *mut T, name: N, value: *mut T) -> faible::Result<()>
+	where
+		*mut T: Sized,
+	{
+		*strong = value;
+		Ok(())
+	}
+
+	fn insert<'a>(
+		&self,
+		strong: &'a mut *mut T,
+		name: N,
+		value: *mut T,
+	) -> faible::Result<(&'a mut *mut T, Option<*mut T>)>
+	where
+		*mut T: Sized,
+	{
+		let previous = mem::replace(strong, value);
+		Ok((strong, Some(previous)))
 	}
 }

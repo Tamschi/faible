@@ -142,37 +142,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		no_weak_conversions,
 	} = args;
 
-	let descriptor_type =
-		match call2_allow_incomplete(quote_spanned!(Span::mixed_site()=> #descriptor), |input| {
-			input.parse::<Path>()
-		}) {
-			Ok(mut path) => {
-				if path.segments.len() > 1 {
-					let last_ident_string =
-						path.segments.last().expect("unreachable").ident.to_string();
-					if last_ident_string
-						.strip_prefix("r#")
-						.unwrap_or(&last_ident_string)
-						.chars()
-						.next()
-						.expect("This *should* be non-empty.")
-						.is_ascii_lowercase()
-					{
-						path.segments.pop().expect("unreachable");
-						path.segments
-							.pop()
-							.expect("unreachable")
-							.into_value()
-							.pipe(|segment| path.segments.push(segment));
-					}
-				}
-				path
-			}
-			Err(error) => {
-				errors.push(error);
-				parse_quote_spanned!(descriptor.span()=> __faible__UnknownType)
-			}
-		};
+	let descriptor_type = descriptor_type(&descriptor, errors);
 
 	let fields = quote_spanned! {fields_span.resolved_at(Span::mixed_site())=>
 		(pub <#descriptor_type as #faible::Descriptor>::Weak)
@@ -208,11 +178,17 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		impl #impl_generics #faible::Faible for #ident #type_generics #impl_where {
 			type Descriptor = #descriptor_type;
 
-			fn as_strong(&self) -> #faible::Result<&<Self::Descriptor as #faible::Descriptor>::Strong> {
+			fn as_strong(&self) -> ::core::result::Result<
+				&<Self::Descriptor as #faible::Descriptor>::Strong,
+				<Self::Descriptor as #faible::Descriptor>::Error
+			> {
 				#faible::Descriptor::strong(&#descriptor, &self.0)
 			}
 
-			fn as_strong_mut(&mut self) -> #faible::Result<&mut <Self::Descriptor as #faible::Descriptor>::Strong> {
+			fn as_strong_mut(&mut self) -> ::core::result::Result<
+				&mut <Self::Descriptor as #faible::Descriptor>::Strong,
+				<Self::Descriptor as #faible::Descriptor>::Error
+			> {
 				#faible::Descriptor::strong_mut(&#descriptor, &mut self.0)
 			}
 		}
@@ -226,10 +202,10 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 
 		#[automatically_derived]
 		impl #impl_generics core::convert::TryFrom<#ident #type_generics> for <#descriptor_type as #faible::Descriptor>::Strong #impl_where {
-			type Error = #faible::Error;
+			type Error = <#descriptor_type as #faible::Descriptor>::Error;
 
-			fn try_from(value: #ident #type_generics) -> #faible::Result<Self> {
-				#faible::Result::Ok(#faible::Descriptor::try_weak_into_strong(&#descriptor, value.0)?)
+			fn try_from(value: #ident #type_generics) -> ::core::result::Result<Self, Self::Error> {
+				::core::result::Result::Ok(#faible::Descriptor::try_weak_into_strong(&#descriptor, value.0)?)
 			}
 		}
 
@@ -244,6 +220,39 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		#[automatically_derived]
 		impl #impl_generics #ident #type_generics #impl_where {
 			#(#methods)*
+		}
+	}
+}
+
+fn descriptor_type(descriptor: &Expr, errors: &mut Vec<Error>) -> Path {
+	match call2_allow_incomplete(quote_spanned!(Span::mixed_site()=> #descriptor), |input| {
+		input.parse::<Path>()
+	}) {
+		Ok(mut path) => {
+			if path.segments.len() > 1 {
+				let last_ident_string =
+					path.segments.last().expect("unreachable").ident.to_string();
+				if last_ident_string
+					.strip_prefix("r#")
+					.unwrap_or(&last_ident_string)
+					.chars()
+					.next()
+					.expect("This *should* be non-empty.")
+					.is_ascii_lowercase()
+				{
+					path.segments.pop().expect("unreachable");
+					path.segments
+						.pop()
+						.expect("unreachable")
+						.into_value()
+						.pipe(|segment| path.segments.push(segment));
+				}
+			}
+			path
+		}
+		Err(error) => {
+			errors.push(error);
+			parse_quote_spanned!(descriptor.span()=> __faible__UnknownType)
 		}
 	}
 }
@@ -276,6 +285,8 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 		semi_token,
 	} = struct_;
 
+	let descriptor_type = descriptor_type(descriptor, errors);
+
 	let fields_span = fields.span();
 	let methods = fields
 		.into_iter()
@@ -307,28 +318,28 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
-					#vis fn #get(&self) -> #faible::Result<&#ty> {
+					#vis fn #get(&self) -> ::core::result::Result<&#ty, <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong(&descriptor, &self.0)?;
 						#faible::FieldAccess::get(&descriptor, strong, #name)
 					}
 
 					#(#attrs)*
-					#vis fn #get_mut(&mut self) -> #faible::Result<&mut #ty> {
+					#vis fn #get_mut(&mut self) -> ::core::result::Result<&mut #ty, <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::FieldAccess::get_mut(&descriptor, strong, #name)
 					}
 
 					#(#attrs)*
-					#vis fn #set(&mut self, value: #ty) -> #faible::Result<()> {
+					#vis fn #set(&mut self, value: #ty) -> ::core::result::Result<(), <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::FieldAccess::set(&descriptor, strong, #name, value)
 					}
 
 					#(#attrs)*
-					#vis fn #insert(&mut self, value: #ty) -> #faible::Result<(&mut #ty, ::core::option::Option<#ty>)> {
+					#vis fn #insert(&mut self, value: #ty) -> ::core::result::Result<(&mut #ty, ::core::option::Option<#ty>), <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::FieldAccess::insert(&descriptor, strong, #name, value)
@@ -366,6 +377,8 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 		fields,
 	} = union;
 
+	let descriptor_type = descriptor_type(descriptor, errors);
+
 	let methods = fields
 		.named
 		.into_iter()
@@ -397,28 +410,28 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
-					#vis fn #get(&self) -> #faible::Result<Option<&#ty>> {
+					#vis fn #get(&self) -> ::core::result::Result<Option<&#ty>, <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong(&descriptor, &self.0)?;
 						#faible::UnionFieldAccess::get(&descriptor, strong, #name)
 					}
 
 					#(#attrs)*
-					#vis fn #get_mut(&mut self) -> #faible::Result<Option<&mut #ty>> {
+					#vis fn #get_mut(&mut self) -> ::core::result::Result<Option<&mut #ty>, <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::UnionFieldAccess::get_mut(&descriptor, strong, #name)
 					}
 
 					#(#attrs)*
-					#vis fn #set(&mut self, value: #ty) -> #faible::Result<()> {
+					#vis fn #set(&mut self, value: #ty) -> ::core::result::Result<(), <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::UnionFieldAccess::set(&descriptor, strong, #name, value)
 					}
 
 					#(#attrs)*
-					#vis fn #insert(&mut self, value: #ty) -> #faible::Result<(&mut #ty, ::core::option::Option<#ty>)> {
+					#vis fn #insert(&mut self, value: #ty) -> ::core::result::Result<(&mut #ty, ::core::option::Option<#ty>), <#descriptor_type as #faible::Descriptor>::Error> {
 						let descriptor = #descriptor;
 						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
 						#faible::UnionFieldAccess::insert(&descriptor, strong, #name, value)

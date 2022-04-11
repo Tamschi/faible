@@ -17,9 +17,9 @@ mod readme {}
 
 pub use faible_proc_macro_definitions::faible;
 
+//TODO: Remove this and make the crate no_std.
 #[derive(Debug)]
 pub struct Error(String);
-pub type Result<T> = core::result::Result<T, Error>;
 
 impl Error {
 	#[must_use]
@@ -38,17 +38,27 @@ impl std::error::Error for Error {}
 pub trait Faible {
 	type Descriptor: Descriptor;
 
-	fn as_strong(&self) -> Result<&<Self::Descriptor as Descriptor>::Strong>;
-	fn as_strong_mut(&mut self) -> Result<&mut <Self::Descriptor as Descriptor>::Strong>;
+	fn as_strong(
+		&self,
+	) -> Result<&<Self::Descriptor as Descriptor>::Strong, <Self::Descriptor as Descriptor>::Error>;
+	fn as_strong_mut(
+		&mut self,
+	) -> Result<
+		&mut <Self::Descriptor as Descriptor>::Strong,
+		<Self::Descriptor as Descriptor>::Error,
+	>;
 }
 
 pub trait Descriptor {
 	type Weak;
 	type Strong;
-	fn strong<'a>(&self, weak: &'a Self::Weak) -> Result<&'a Self::Strong>;
-	fn strong_mut<'a>(&self, weak: &'a mut Self::Weak) -> Result<&'a mut Self::Strong>;
+	type Error;
+
+	fn strong<'a>(&self, weak: &'a Self::Weak) -> Result<&'a Self::Strong, Self::Error>;
+	fn strong_mut<'a>(&self, weak: &'a mut Self::Weak)
+		-> Result<&'a mut Self::Strong, Self::Error>;
 	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak;
-	fn try_weak_into_strong(&self, weak: Self::Weak) -> Result<Self::Strong>;
+	fn try_weak_into_strong(&self, weak: Self::Weak) -> Result<Self::Strong, Self::Error>;
 }
 
 /// # Safety
@@ -107,10 +117,10 @@ pub unsafe trait View<T: ?Sized> {
 /// This is the identity pun.
 unsafe impl<T: ?Sized> View<T> for T {}
 
-pub trait FieldAccess<Strong: ?Sized, T: ?Sized, N> {
-	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T>;
-	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<&'a mut T>;
-	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<()>
+pub trait FieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
+	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T, E>;
+	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<&'a mut T, E>;
+	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
 	where
 		T: Sized;
 	fn insert<'a>(
@@ -118,15 +128,15 @@ pub trait FieldAccess<Strong: ?Sized, T: ?Sized, N> {
 		strong: &'a mut Strong,
 		name: N,
 		value: T,
-	) -> Result<(&'a mut T, Option<T>)>
+	) -> Result<(&'a mut T, Option<T>), E>
 	where
 		T: Sized;
 }
 
-pub trait UnionFieldAccess<Strong: ?Sized, T: ?Sized, N> {
-	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<Option<&'a T>>;
-	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<Option<&'a mut T>>;
-	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<()>
+pub trait UnionFieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
+	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<Option<&'a T>, E>;
+	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<Option<&'a mut T>, E>;
+	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
 	where
 		T: Sized;
 	fn insert<'a>(
@@ -134,11 +144,11 @@ pub trait UnionFieldAccess<Strong: ?Sized, T: ?Sized, N> {
 		strong: &'a mut Strong,
 		name: N,
 		value: T,
-	) -> Result<(&'a mut T, Option<T>)>
+	) -> Result<(&'a mut T, Option<T>), E>
 	where
 		T: Sized;
 }
 
-pub trait VariantFilter<Strong: ?Sized, N> {
-	fn predicate(&self, strong: &Strong, name: N) -> Result<bool>;
+pub trait VariantFilter<Strong: ?Sized, E, N> {
+	fn predicate(&self, strong: &Strong, name: N) -> Result<bool, E>;
 }

@@ -1,5 +1,5 @@
 use faible::{faible, Descriptor, UnionFieldAccess};
-use std::{marker::PhantomData, mem, ptr::NonNull};
+use std::{convert::Infallible, marker::PhantomData, mem, ptr::NonNull};
 
 #[faible(NullableDescriptor::<T>::new(), names = "_unused", no_weak_conversions)]
 pub union Nullable<T: 'static + ?Sized> {
@@ -17,12 +17,16 @@ impl<T: ?Sized> NullableDescriptor<T> {
 impl<T: 'static + ?Sized> Descriptor for NullableDescriptor<T> {
 	type Weak = *mut T;
 	type Strong = *mut T;
+	type Error = Infallible;
 
-	fn strong<'a>(&self, weak: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
+	fn strong<'a>(&self, weak: &'a Self::Weak) -> Result<&'a Self::Strong, Self::Error> {
 		Ok(weak)
 	}
 
-	fn strong_mut<'a>(&self, weak: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
+	fn strong_mut<'a>(
+		&self,
+		weak: &'a mut Self::Weak,
+	) -> Result<&'a mut Self::Strong, Self::Error> {
 		Ok(weak)
 	}
 
@@ -30,13 +34,13 @@ impl<T: 'static + ?Sized> Descriptor for NullableDescriptor<T> {
 		strong
 	}
 
-	fn try_weak_into_strong(&self, weak: Self::Weak) -> faible::Result<Self::Strong> {
+	fn try_weak_into_strong(&self, weak: Self::Weak) -> Result<Self::Strong, Self::Error> {
 		Ok(weak)
 	}
 }
 
-impl<T: ?Sized, N> UnionFieldAccess<*mut T, NonNull<T>, N> for NullableDescriptor<T> {
-	fn get<'a>(&self, strong: &'a *mut T, name: N) -> faible::Result<Option<&'a NonNull<T>>> {
+impl<T: ?Sized, E, N> UnionFieldAccess<*mut T, E, NonNull<T>, N> for NullableDescriptor<T> {
+	fn get<'a>(&self, strong: &'a *mut T, name: N) -> Result<Option<&'a NonNull<T>>, E> {
 		unimplemented!()
 	}
 
@@ -44,11 +48,11 @@ impl<T: ?Sized, N> UnionFieldAccess<*mut T, NonNull<T>, N> for NullableDescripto
 		&self,
 		strong: &'a mut *mut T,
 		name: N,
-	) -> faible::Result<Option<&'a mut NonNull<T>>> {
+	) -> Result<Option<&'a mut NonNull<T>>, E> {
 		unimplemented!()
 	}
 
-	fn set(&self, strong: &mut *mut T, name: N, value: NonNull<T>) -> faible::Result<()>
+	fn set(&self, strong: &mut *mut T, name: N, value: NonNull<T>) -> Result<(), E>
 	where
 		NonNull<T>: Sized,
 	{
@@ -60,7 +64,7 @@ impl<T: ?Sized, N> UnionFieldAccess<*mut T, NonNull<T>, N> for NullableDescripto
 		strong: &'a mut *mut T,
 		name: N,
 		value: NonNull<T>,
-	) -> faible::Result<(&'a mut NonNull<T>, Option<NonNull<T>>)>
+	) -> Result<(&'a mut NonNull<T>, Option<NonNull<T>>), E>
 	where
 		NonNull<T>: Sized,
 	{
@@ -68,20 +72,16 @@ impl<T: ?Sized, N> UnionFieldAccess<*mut T, NonNull<T>, N> for NullableDescripto
 	}
 }
 
-impl<T: ?Sized, N> UnionFieldAccess<*mut T, *mut T, N> for NullableDescriptor<T> {
-	fn get<'a>(&self, strong: &'a *mut T, name: N) -> faible::Result<Option<&'a *mut T>> {
+impl<T: ?Sized, E, N> UnionFieldAccess<*mut T, E, *mut T, N> for NullableDescriptor<T> {
+	fn get<'a>(&self, strong: &'a *mut T, name: N) -> Result<Option<&'a *mut T>, E> {
 		Ok(Some(strong))
 	}
 
-	fn get_mut<'a>(
-		&self,
-		strong: &'a mut *mut T,
-		name: N,
-	) -> faible::Result<Option<&'a mut *mut T>> {
+	fn get_mut<'a>(&self, strong: &'a mut *mut T, name: N) -> Result<Option<&'a mut *mut T>, E> {
 		Ok(Some(strong))
 	}
 
-	fn set(&self, strong: &mut *mut T, name: N, value: *mut T) -> faible::Result<()>
+	fn set(&self, strong: &mut *mut T, name: N, value: *mut T) -> Result<(), E>
 	where
 		*mut T: Sized,
 	{
@@ -94,7 +94,7 @@ impl<T: ?Sized, N> UnionFieldAccess<*mut T, *mut T, N> for NullableDescriptor<T>
 		strong: &'a mut *mut T,
 		name: N,
 		value: *mut T,
-	) -> faible::Result<(&'a mut *mut T, Option<*mut T>)>
+	) -> Result<(&'a mut *mut T, Option<*mut T>), E>
 	where
 		*mut T: Sized,
 	{

@@ -107,13 +107,17 @@ pub unsafe trait View<T: ?Sized> {
 /// This is the identity pun.
 unsafe impl<T: ?Sized> View<T> for T {}
 
-pub trait FieldAccess<This: ?Sized, T: ?Sized, N> {
-	fn get<'a>(&self, this: &'a This, name: N) -> Result<&'a T>;
-	fn get_mut<'a>(&self, this: &'a mut This, name: N) -> Result<&'a mut T>;
-	fn set(&self, this: &mut This, name: N, value: T) -> Result<()>
+pub trait FieldAccess<Strong: ?Sized, T: ?Sized, N> {
+	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T>;
+	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<&'a mut T>;
+	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<()>
 	where
 		T: Sized;
-	fn insert<'a>(&self, this: &'a mut This, name: N, value: T) -> Result<(&'a mut T, Option<T>)>
+	fn insert<'a>(&self, strong: &'a mut Strong, name: N, value: T) -> Result<(&'a mut T, Option<T>)>
 	where
 		T: Sized;
+}
+
+pub trait VariantFilter<Strong: ?Sized, N> {
+	fn predicate(&self, strong: &Strong, name: N) -> Result<bool>;
 }

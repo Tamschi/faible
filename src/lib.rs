@@ -45,8 +45,8 @@ pub trait Faible {
 pub trait Descriptor {
 	type Weak;
 	type Strong;
-	fn strong<'a>(&self, this: &'a Self::Weak) -> Result<&'a Self::Strong>;
-	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> Result<&'a mut Self::Strong>;
+	fn strong<'a>(&self, weak: &'a Self::Weak) -> Result<&'a Self::Strong>;
+	fn strong_mut<'a>(&self, weak: &'a mut Self::Weak) -> Result<&'a mut Self::Strong>;
 	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak;
 	fn try_weak_into_strong(&self, weak: Self::Weak) -> Result<Self::Strong>;
 }
@@ -113,7 +113,12 @@ pub trait FieldAccess<Strong: ?Sized, T: ?Sized, N> {
 	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<()>
 	where
 		T: Sized;
-	fn insert<'a>(&self, strong: &'a mut Strong, name: N, value: T) -> Result<(&'a mut T, Option<T>)>
+	fn insert<'a>(
+		&self,
+		strong: &'a mut Strong,
+		name: N,
+		value: T,
+	) -> Result<(&'a mut T, Option<T>)>
 	where
 		T: Sized;
 }
@@ -124,7 +129,12 @@ pub trait UnionFieldAccess<Strong: ?Sized, T: ?Sized, N> {
 	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<()>
 	where
 		T: Sized;
-	fn insert<'a>(&self, strong: &'a mut Strong, name: N, value: T) -> Result<(&'a mut T, Option<T>)>
+	fn insert<'a>(
+		&self,
+		strong: &'a mut Strong,
+		name: N,
+		value: T,
+	) -> Result<(&'a mut T, Option<T>)>
 	where
 		T: Sized;
 }

@@ -40,6 +40,7 @@ struct Args {
 	descriptor: Expr,
 	faible: Path,
 	names: Expr,
+	no_weak_conversions: bool,
 }
 impl Default for Args {
 	fn default() -> Self {
@@ -47,6 +48,7 @@ impl Default for Args {
 			descriptor: parse_quote_spanned! {Span::mixed_site()=> ()},
 			faible: parse_quote_spanned! {Span::mixed_site()=> ::faible},
 			names: parse_quote_spanned! {Span::mixed_site()=> __faible__name_required},
+			no_weak_conversions: false,
 		}
 	}
 }
@@ -57,6 +59,7 @@ fn args_parser(errors: &mut Vec<Error>) -> impl '_ + FnOnce(ParseStream) -> Resu
 
 		custom_keyword!(faible);
 		custom_keyword!(names);
+		custom_keyword!(no_weak_conversions);
 	}
 
 	move |input: ParseStream| {
@@ -84,6 +87,11 @@ fn args_parser(errors: &mut Vec<Error>) -> impl '_ + FnOnce(ParseStream) -> Resu
 						.insist::<Token![=]>(errors)
 						.and_then(|_| input.insist(errors))
 						.then_set(&mut args.names);
+				} else if lookahead.peek(kw::no_weak_conversions) {
+					input
+						.parse::<kw::no_weak_conversions>()
+						.expect("unreachable");
+					args.no_weak_conversions = true;
 				} else {
 					errors.push(lookahead.error());
 					input.parse::<TokenTree>().ok();
@@ -131,6 +139,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		descriptor,
 		faible,
 		names: _,
+		no_weak_conversions,
 	} = args;
 
 	let descriptor_type =
@@ -171,6 +180,25 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 
 	let where_ = generics.where_clause.as_ref();
 	let (impl_generics, type_generics, impl_where) = generics.split_for_impl();
+
+	let weak_conversions = (!no_weak_conversions).then(|| {
+		quote_spanned! {Span::mixed_site()=>
+			#[automatically_derived]
+			impl #impl_generics core::convert::From<<#descriptor_type as #faible::Descriptor>::Weak> for #ident #type_generics #impl_where {
+				fn from(value: <#descriptor_type as #faible::Descriptor>::Weak) -> Self {
+					Self(value)
+				}
+			}
+
+			#[automatically_derived]
+			impl #impl_generics core::convert::From<#ident #type_generics> for <#descriptor_type as #faible::Descriptor>::Weak #impl_where {
+				fn from(value: #ident #type_generics) -> Self {
+					value.0
+				}
+			}
+		}
+	});
+
 	quote_spanned! {Span::mixed_site()=>
 		#(#attrs)*
 		#[repr(transparent)]
@@ -190,23 +218,9 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		}
 
 		#[automatically_derived]
-		impl #impl_generics core::convert::From<<#descriptor_type as #faible::Descriptor>::Weak> for #ident #type_generics #impl_where {
-			fn from(value: <#descriptor_type as #faible::Descriptor>::Weak) -> Self {
-				Self(value)
-			}
-		}
-
-		#[automatically_derived]
 		impl #impl_generics core::convert::From<<#descriptor_type as #faible::Descriptor>::Strong> for #ident #type_generics #impl_where {
 			fn from(value: <#descriptor_type as #faible::Descriptor>::Strong) -> Self {
 				Self(#faible::Descriptor::strong_into_weak(&#descriptor, value))
-			}
-		}
-
-		#[automatically_derived]
-		impl #impl_generics core::convert::From<#ident #type_generics> for <#descriptor_type as #faible::Descriptor>::Weak #impl_where {
-			fn from(value: #ident #type_generics) -> Self {
-				value.0
 			}
 		}
 
@@ -218,6 +232,8 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 				#faible::Result::Ok(#faible::Descriptor::try_weak_into_strong(&#descriptor, value.0)?)
 			}
 		}
+
+		#weak_conversions
 
 		/// # Safety
 		///
@@ -248,6 +264,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 		descriptor,
 		faible,
 		names,
+		no_weak_conversions: _,
 	} = args;
 	let ItemStruct {
 		attrs,
@@ -338,6 +355,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 		descriptor,
 		faible,
 		names,
+		no_weak_conversions: _,
 	} = args;
 	let ItemUnion {
 		attrs,

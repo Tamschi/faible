@@ -2,7 +2,7 @@ use std::{any::Any, marker::PhantomData, mem, ptr::NonNull};
 
 use faible::{faible, Descriptor, UnionFieldAccess};
 
-#[faible(NullableDescriptor::<T>::new(), names = "_unused")]
+#[faible(NullableDescriptor::<T>::new(), names = "_unused", no_weak_conversions)]
 pub union Nullable<T: 'static + ?Sized> {
 	pub non_null: NonNull<T>,
 	pub raw: *mut T,
@@ -16,23 +16,23 @@ impl<T: ?Sized> NullableDescriptor<T> {
 }
 
 impl<T: 'static + ?Sized> Descriptor for NullableDescriptor<T> {
-	type Weak = Box<dyn Any>;
+	type Weak = *mut T;
 	type Strong = *mut T;
 
-	fn strong<'a>(&self, this: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
-		this.downcast_ref().ok_or_else(|| unimplemented!())
+	fn strong<'a>(&self, weak: &'a Self::Weak) -> faible::Result<&'a Self::Strong> {
+		Ok(weak)
 	}
 
-	fn strong_mut<'a>(&self, this: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
-		this.downcast_mut().ok_or_else(|| unimplemented!())
+	fn strong_mut<'a>(&self, weak: &'a mut Self::Weak) -> faible::Result<&'a mut Self::Strong> {
+		Ok(weak)
 	}
 
 	fn strong_into_weak(&self, strong: Self::Strong) -> Self::Weak {
-		Box::new(strong)
+		strong
 	}
 
 	fn try_weak_into_strong(&self, weak: Self::Weak) -> faible::Result<Self::Strong> {
-		*weak.downcast().unwrap_or_else(|_| unimplemented!())
+		Ok(weak)
 	}
 }
 

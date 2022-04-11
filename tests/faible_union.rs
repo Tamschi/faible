@@ -1,6 +1,5 @@
-use std::{any::Any, marker::PhantomData, mem, ptr::NonNull};
-
 use faible::{faible, Descriptor, UnionFieldAccess};
+use std::{marker::PhantomData, mem, ptr::NonNull};
 
 #[faible(NullableDescriptor::<T>::new(), names = "_unused", no_weak_conversions)]
 pub union Nullable<T: 'static + ?Sized> {

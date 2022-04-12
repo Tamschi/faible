@@ -205,7 +205,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 			type Error = <#descriptor_type as #faible::Descriptor>::Error;
 
 			fn try_from(value: #ident #type_generics) -> ::core::result::Result<Self, Self::Error> {
-				::core::result::Result::Ok(#faible::Descriptor::try_weak_into_strong(&#descriptor, value.0)?)
+				#faible::Descriptor::try_weak_into_strong(&#descriptor, value.0)
 			}
 		}
 

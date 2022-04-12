@@ -12,8 +12,8 @@ use syn::{
 	parse_quote_spanned,
 	spanned::Spanned,
 	visit_mut::VisitMut,
-	Attribute, Error, Expr, Field, Generics, Item, ItemStruct, ItemUnion, LitStr, Path, Result,
-	Token, Visibility,
+	Attribute, Error, Expr, Field, Generics, Item, ItemEnum, ItemStruct, ItemUnion, LitStr, Path,
+	Result, Token, Variant, Visibility,
 };
 use tap::Pipe;
 
@@ -123,7 +123,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		methods,
 		semicolon,
 	} = match input {
-		Item::Enum(_) => todo!(),
+		Item::Enum(enum_) => process_enum(enum_, &args, errors),
 		Item::Struct(struct_) => process_struct(struct_, &args, errors),
 		Item::Union(union) => process_union(union, &args, errors),
 		_ => {
@@ -266,6 +266,91 @@ struct Processed {
 	fields_span: Span,
 	methods: Vec<TokenStream>,
 	semicolon: Token![;],
+}
+
+fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Processed {
+	let Args {
+		descriptor,
+		faible,
+		names,
+		no_weak_conversions,
+	} = args;
+	let ItemEnum {
+		attrs,
+		vis,
+		enum_token,
+		ident,
+		generics,
+		brace_token,
+		variants,
+	} = enum_;
+
+	let descriptor_type = descriptor_type(descriptor, errors);
+	let methods = variants
+		.into_iter()
+		.enumerate()
+		.map(
+			|(
+				i,
+				Variant { attrs, ident, fields, discriminant },
+			)| {
+				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(i), ty.span()));
+				let ident_string = ident.to_string();
+
+				let get = if ident_string.starts_with(|c: char| c.is_ascii_digit()) {
+					Ident::new(&format!("get_{ident_string}"), ident.span())
+				} else {
+					ident.clone()
+				};
+				let get_mut = Ident::new(&format!("{get}_mut"), ident.span());
+				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
+				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
+
+				let name = make_name(&ident, names, errors);
+
+				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
+					#(#attrs)*
+					#vis fn #get(&self) -> ::core::result::Result<&#ty, <#descriptor_type as #faible::Descriptor>::Error> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong(&descriptor, &self.0)?;
+						#faible::FieldAccess::get(&descriptor, strong, #name)
+					}
+
+					#(#attrs)*
+					#vis fn #get_mut(&mut self) -> ::core::result::Result<&mut #ty, <#descriptor_type as #faible::Descriptor>::Error> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
+						#faible::FieldAccess::get_mut(&descriptor, strong, #name)
+					}
+
+					#(#attrs)*
+					#vis fn #set(&mut self, value: #ty) -> ::core::result::Result<(), <#descriptor_type as #faible::Descriptor>::Error> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
+						#faible::FieldAccess::set(&descriptor, strong, #name, value)
+					}
+
+					#(#attrs)*
+					#vis fn #insert(&mut self, value: #ty) -> ::core::result::Result<(&mut #ty, ::core::option::Option<#ty>), <#descriptor_type as #faible::Descriptor>::Error> {
+						let descriptor = #descriptor;
+						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
+						#faible::FieldAccess::insert(&descriptor, strong, #name, value)
+					}
+				}
+			},
+		)
+		.collect();
+
+	Processed {
+		attrs,
+		vis,
+		struct_token: Token![struct](enum_token.span),
+		ident,
+		generics,
+		fields_span: brace_token.span,
+		methods: todo!(),
+		semicolon: Token![;](brace_token.span),
+	}
 }
 
 fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> Processed {

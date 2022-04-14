@@ -124,6 +124,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		fields_span,
 		methods,
 		semicolon,
+		items,
 	} = match input {
 		Item::Enum(enum_) => process_enum(enum_, &args, errors),
 		Item::Struct(struct_) => process_struct(struct_, &args, errors),
@@ -223,6 +224,8 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		impl #impl_generics #ident #type_generics #impl_where {
 			#(#methods)*
 		}
+
+		#(#items)*
 	}
 }
 
@@ -268,6 +271,7 @@ struct Processed {
 	fields_span: Span,
 	methods: Vec<TokenStream>,
 	semicolon: Token![;],
+	items: Vec<TokenStream>,
 }
 
 fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Processed {
@@ -293,9 +297,17 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 
 	let descriptor_type = descriptor_type(descriptor, errors);
 
-	// let mut ref_variants = vec![];
-	// let mut mut_variants = vec![];
-	// let mut owned_variants = vec![];
+	let mut owned_variants = vec![];
+	let mut ref_variants = vec![];
+	let mut mut_variants = vec![];
+
+	let borrow_generics = {
+		let mut generics = generics.clone();
+		generics
+			.params
+			.insert(0, parse_quote_spanned!(Span::mixed_site()=> 'access));
+		generics
+	};
 
 	for (
 		i,
@@ -309,11 +321,71 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 	{
 		let args = take_args_from_attrs(&args.into(), &mut attrs, errors);
 
-		todo!()
+		owned_variants.push(Variant {
+			attrs: attrs.clone(),
+			ident: ident.clone(),
+			fields: fields.clone(),
+			discriminant: discriminant.clone(),
+		});
+
+		ref_variants.push(Variant {
+			attrs: attrs.clone(),
+			ident: ident.clone(),
+			fields: {
+				let mut fields = fields.clone();
+				for field in fields.iter_mut() {
+					let ty = &field.ty;
+					field.ty = parse_quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
+						&'access #ty
+					};
+				}
+				fields
+			},
+			discriminant: discriminant.clone(),
+		});
+
+		mut_variants.push(Variant {
+			attrs: attrs.clone(),
+			ident: ident.clone(),
+			fields: {
+				let mut fields = fields.clone();
+				for field in fields.iter_mut() {
+					let ty = &field.ty;
+					field.ty = parse_quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
+						&'access mut #ty
+					};
+				}
+				fields
+			},
+			discriminant: discriminant.clone(),
+		});
 	}
 
-	let methods = quote_spanned! {Span::mixed_site()=>
-	};
+	let where_ = generics.where_clause.as_ref();
+
+	let items = vec![
+		quote_spanned! {Span::mixed_site()=>
+			#(#attrs)*
+			#[automatically_derived]
+			#vis #enum_token #owned_ty #generics #where_ {
+				#(#owned_variants,)*
+			}
+		},
+		quote_spanned! {Span::mixed_site()=>
+			#(#attrs)*
+			#[automatically_derived]
+			#vis #enum_token #ref_ty #borrow_generics #where_ {
+				#(#ref_variants,)*
+			}
+		},
+		quote_spanned! {Span::mixed_site()=>
+			#(#attrs)*
+			#[automatically_derived]
+			#vis #enum_token #mut_ty #borrow_generics #where_ {
+				#(#mut_variants,)*
+			}
+		},
+	];
 
 	Processed {
 		attrs,
@@ -322,8 +394,9 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		ident,
 		generics,
 		fields_span: brace_token.span,
-		methods: vec![methods],
+		methods: vec![],
 		semicolon: Token![;](brace_token.span),
+		items,
 	}
 }
 #[derive(Clone)]
@@ -368,7 +441,11 @@ fn take_args_from_attrs(
 				input.insist(errors).then_set(&mut inner_args.descriptor);
 			}
 
-			while let Some(_) = input.parse::<Option<Token![,]>>().expect("infallible") {
+			while input
+				.parse::<Option<Token![,]>>()
+				.expect("infallible")
+				.is_some()
+			{
 				let lookahead = input.lookahead1();
 
 				if lookahead.peek(kw::name) {
@@ -488,6 +565,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 		fields_span,
 		methods,
 		semicolon: semi_token.unwrap_or_else(|| Token![;](fields_span)),
+		items: vec![],
 	}
 }
 
@@ -580,6 +658,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 		fields_span: fields.brace_token.span,
 		methods,
 		semicolon: Token![;](fields.brace_token.span),
+		items: vec![],
 	}
 }
 

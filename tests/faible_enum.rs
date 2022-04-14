@@ -15,6 +15,9 @@ pub enum Value {
 	Structured { a: u8, b: u16 },
 }
 
+#[faible(ValueDescriptor::new(), no_weak_conversions)]
+pub enum Empty {}
+
 pub struct ValueDescriptor;
 impl ValueDescriptor {
 	pub fn new() -> Self {

@@ -297,17 +297,11 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 
 	let descriptor_type = descriptor_type(descriptor, errors);
 
+	let has_fields = variants.iter().any(|variant| !variant.fields.is_empty());
+
 	let mut owned_variants = vec![];
 	let mut ref_variants = vec![];
 	let mut mut_variants = vec![];
-
-	let borrow_generics = {
-		let mut generics = generics.clone();
-		generics
-			.params
-			.insert(0, parse_quote_spanned!(Span::mixed_site()=> 'access));
-		generics
-	};
 
 	for (
 		i,
@@ -361,6 +355,15 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		});
 	}
 
+	let borrow_generics = {
+		let mut generics = generics.clone();
+		if has_fields {
+			generics
+				.params
+				.insert(0, parse_quote_spanned!(Span::mixed_site()=> 'access));
+		}
+		generics
+	};
 	let where_ = generics.where_clause.as_ref();
 
 	let items = vec![

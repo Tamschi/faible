@@ -71,6 +71,7 @@ dependencies = [
  "quote",
  "syn",
  "tap",
+ "vec-drain-where",
 ]
 
 [[package]]
@@ -321,6 +322,12 @@ dependencies = [
  "matches",
  "percent-encoding",
 ]
+
+[[package]]
+name = "vec-drain-where"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a31e425b0dab548c1d00c0b1233646127a635fd2592135fc9c48ebd5646cf982"
 
 [[package]]
 name = "version-sync"

@@ -1,4 +1,4 @@
-use call2_for_syn::call2_allow_incomplete;
+use call2_for_syn::{call2_allow_incomplete, call2_strict, Incomplete};
 use heck::{
 	ToKebabCase, ToLowerCamelCase, ToPascalCase, ToShoutyKebabCase, ToShoutySnakeCase,
 	ToShoutySnekCase, ToSnakeCase, ToSnekCase, ToTitleCase, ToUpperCamelCase,
@@ -16,6 +16,16 @@ use syn::{
 	Result, Token, Variant, Visibility,
 };
 use tap::Pipe;
+use vec_drain_where::VecDrainWhereExt;
+
+mod kw {
+	use syn::custom_keyword;
+
+	custom_keyword!(faible);
+	custom_keyword!(name);
+	custom_keyword!(names);
+	custom_keyword!(no_weak_conversions);
+}
 
 #[proc_macro_attribute]
 pub fn faible(args: TokenStream1, input: TokenStream1) -> TokenStream1 {
@@ -54,14 +64,6 @@ impl Default for Args {
 }
 
 fn args_parser(errors: &mut Vec<Error>) -> impl '_ + FnOnce(ParseStream) -> Result<Args> {
-	mod kw {
-		use syn::custom_keyword;
-
-		custom_keyword!(faible);
-		custom_keyword!(names);
-		custom_keyword!(no_weak_conversions);
-	}
-
 	move |input: ParseStream| {
 		let mut args = Args::default();
 
@@ -285,61 +287,33 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		variants,
 	} = enum_;
 
+	let ref_ty = Ident::new(&(ident.to_string() + "VariantRef"), Span::call_site());
+	let mut_ty = Ident::new(&(ident.to_string() + "VariantMut"), Span::call_site());
+	let owned_ty = Ident::new(&(ident.to_string() + "VariantOwned"), Span::call_site());
+
 	let descriptor_type = descriptor_type(descriptor, errors);
-	let methods = variants
-		.into_iter()
-		.enumerate()
-		.map(
-			|(
-				i,
-				Variant { attrs, ident, fields, discriminant },
-			)| {
-				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(i), ty.span()));
-				let ident_string = ident.to_string();
 
-				let get = if ident_string.starts_with(|c: char| c.is_ascii_digit()) {
-					Ident::new(&format!("get_{ident_string}"), ident.span())
-				} else {
-					ident.clone()
-				};
-				let get_mut = Ident::new(&format!("{get}_mut"), ident.span());
-				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
-				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
+	// let mut ref_variants = vec![];
+	// let mut mut_variants = vec![];
+	// let mut owned_variants = vec![];
 
-				let name = make_name(&ident, names, errors);
+	for (
+		i,
+		Variant {
+			mut attrs,
+			ident,
+			fields,
+			discriminant,
+		},
+	) in variants.into_iter().enumerate()
+	{
+		let args = take_args_from_attrs(&args.into(), &mut attrs, errors);
 
-				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
-					#(#attrs)*
-					#vis fn #get(&self) -> ::core::result::Result<&#ty, <#descriptor_type as #faible::Descriptor>::Error> {
-						let descriptor = #descriptor;
-						let strong = #faible::Descriptor::strong(&descriptor, &self.0)?;
-						#faible::FieldAccess::get(&descriptor, strong, #name)
-					}
+		todo!()
+	}
 
-					#(#attrs)*
-					#vis fn #get_mut(&mut self) -> ::core::result::Result<&mut #ty, <#descriptor_type as #faible::Descriptor>::Error> {
-						let descriptor = #descriptor;
-						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
-						#faible::FieldAccess::get_mut(&descriptor, strong, #name)
-					}
-
-					#(#attrs)*
-					#vis fn #set(&mut self, value: #ty) -> ::core::result::Result<(), <#descriptor_type as #faible::Descriptor>::Error> {
-						let descriptor = #descriptor;
-						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
-						#faible::FieldAccess::set(&descriptor, strong, #name, value)
-					}
-
-					#(#attrs)*
-					#vis fn #insert(&mut self, value: #ty) -> ::core::result::Result<(&mut #ty, ::core::option::Option<#ty>), <#descriptor_type as #faible::Descriptor>::Error> {
-						let descriptor = #descriptor;
-						let strong = #faible::Descriptor::strong_mut(&descriptor, &mut self.0)?;
-						#faible::FieldAccess::insert(&descriptor, strong, #name, value)
-					}
-				}
-			},
-		)
-		.collect();
+	let methods = quote_spanned! {Span::mixed_site()=>
+	};
 
 	Processed {
 		attrs,
@@ -348,9 +322,80 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		ident,
 		generics,
 		fields_span: brace_token.span,
-		methods: todo!(),
+		methods: vec![methods],
 		semicolon: Token![;](brace_token.span),
 	}
+}
+#[derive(Clone)]
+struct InnerArgs {
+	descriptor: Expr,
+	name: Option<Expr>,
+	names: Expr,
+}
+impl From<Args> for InnerArgs {
+	fn from(args: Args) -> Self {
+		Self {
+			descriptor: args.descriptor,
+			name: None,
+			names: args.names,
+		}
+	}
+}
+impl From<&Args> for InnerArgs {
+	fn from(args: &Args) -> Self {
+		Self {
+			descriptor: args.descriptor.clone(),
+			name: None,
+			names: args.names.clone(),
+		}
+	}
+}
+
+fn take_args_from_attrs(
+	args: &InnerArgs,
+	attrs: &mut Vec<Attribute>,
+	errors: &mut Vec<Error>,
+) -> InnerArgs {
+	let mut inner_args = args.clone();
+
+	for attr in attrs.e_drain_where(|attr| attr.path.is_ident("faible")) {
+		let Attribute { tokens, .. } = attr;
+
+		call2_strict(tokens, |input| {
+			if input.peek(Token![_]) {
+				input.parse::<Token![_]>().expect("unreachable");
+			} else {
+				input.insist(errors).then_set(&mut inner_args.descriptor);
+			}
+
+			while let Some(_) = input.parse::<Option<Token![,]>>().expect("infallible") {
+				let lookahead = input.lookahead1();
+
+				if lookahead.peek(kw::name) {
+					let name = input.parse::<kw::name>().expect("unreachable");
+					if inner_args.name.is_some() {
+						errors.push(Error::new(name.span, "Duplicate name definition."))
+					}
+					input.insist::<Token![=]>(errors);
+					inner_args.name = input.insist(errors);
+				} else if lookahead.peek(kw::names) {
+					input.parse::<kw::names>().expect("unreachable");
+					input.insist::<Token![=]>(errors);
+					input.insist(errors).then_set(&mut inner_args.names);
+				} else {
+					errors.push(lookahead.error())
+				}
+			}
+		})
+		.unwrap_or_else(
+			|Incomplete {
+			     parsed: (),
+			     syn_error,
+			 }| errors.push(syn_error),
+		);
+	}
+
+	inner_args
 }
 
 fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> Processed {

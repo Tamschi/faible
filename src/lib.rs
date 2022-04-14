@@ -5,11 +5,9 @@
 #![doc(html_root_url = "https://docs.rs/faible/0.0.1")]
 #![warn(clippy::pedantic, missing_docs)]
 #![allow(clippy::semicolon_if_nothing_returned)]
+#![no_std]
 
-use std::{
-	fmt::{self, Display, Formatter},
-	mem::{ManuallyDrop, MaybeUninit},
-};
+use core::mem::{ManuallyDrop, MaybeUninit};
 
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
@@ -17,23 +15,11 @@ mod readme {}
 
 pub use faible_proc_macro_definitions::faible;
 
-//TODO: Remove this and make the crate no_std.
-#[derive(Debug)]
-pub struct Error(String);
-
-impl Error {
-	#[must_use]
-	pub fn new(message: String) -> Error {
-		Self(message)
-	}
+/// Allows specific errors to be created in generated code.
+pub trait Error {
+	/// Raised iff no matching enum variant could be determined.
+	fn no_variant_recognized() -> Self;
 }
-
-impl Display for Error {
-	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", &self.0)
-	}
-}
-impl std::error::Error for Error {}
 
 pub trait Faible {
 	type Descriptor: Descriptor;
@@ -52,7 +38,7 @@ pub trait Faible {
 pub trait Descriptor {
 	type Weak;
 	type Strong;
-	type Error;
+	type Error: crate::Error;
 
 	fn strong<'a>(&self, weak: &'a Self::Weak) -> Result<&'a Self::Strong, Self::Error>;
 	fn strong_mut<'a>(&self, weak: &'a mut Self::Weak)

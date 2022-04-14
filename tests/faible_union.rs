@@ -17,7 +17,7 @@ impl<T: ?Sized> NullableDescriptor<T> {
 impl<T: 'static + ?Sized> Descriptor for NullableDescriptor<T> {
 	type Weak = *mut T;
 	type Strong = *mut T;
-	type Error = Infallible;
+	type Error = Error;
 
 	fn strong<'a>(&self, weak: &'a Self::Weak) -> Result<&'a Self::Strong, Self::Error> {
 		Ok(weak)
@@ -100,5 +100,12 @@ impl<T: ?Sized, E, N> UnionFieldAccess<*mut T, E, *mut T, N> for NullableDescrip
 	{
 		let previous = mem::replace(strong, value);
 		Ok((strong, Some(previous)))
+	}
+}
+
+pub struct Error;
+impl faible::Error for Error {
+	fn no_variant_recognized() -> Self {
+		unimplemented!()
 	}
 }

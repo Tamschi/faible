@@ -387,6 +387,18 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		},
 	];
 
+	let methods = vec![quote_spanned! {Span::mixed_site()=>
+		#vis fn as_variant<'access>(&self) -> ::core::result::Result<
+			#ref_ty #borrow_generics,
+			<#descriptor_type as #faible::Descriptor>::Error,
+		> {
+			//TODO
+			{
+				Err(<<#descriptor_type as #faible::Descriptor>::Error as #faible::Error>::no_variant_recognized())
+			}
+		}
+	}];
+
 	Processed {
 		attrs,
 		vis,
@@ -394,7 +406,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		ident,
 		generics,
 		fields_span: brace_token.span,
-		methods: vec![],
+		methods,
 		semicolon: Token![;](brace_token.span),
 		items,
 	}

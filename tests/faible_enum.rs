@@ -31,7 +31,7 @@ impl Default for ValueDescriptor {
 impl Descriptor for ValueDescriptor {
 	type Weak = ();
 	type Strong = ();
-	type Error = ();
+	type Error = Error;
 
 	fn strong<'a>(&self, weak: &'a Self::Weak) -> Result<&'a Self::Strong, Self::Error> {
 		Ok(weak)
@@ -50,5 +50,12 @@ impl Descriptor for ValueDescriptor {
 
 	fn try_weak_into_strong(&self, weak: Self::Weak) -> Result<Self::Strong, Self::Error> {
 		Ok(weak)
+	}
+}
+
+pub struct Error;
+impl faible::Error for Error {
+	fn no_variant_recognized() -> Self {
+		unimplemented!()
 	}
 }

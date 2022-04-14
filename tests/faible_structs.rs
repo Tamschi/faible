@@ -1,4 +1,4 @@
-use faible::{faible, Descriptor, Error, FieldAccess, View};
+use faible::{faible, Descriptor, FieldAccess, View};
 use serde_json::{map::Entry, Map, Number, Value};
 use std::mem;
 use tap::Pipe;
@@ -260,5 +260,17 @@ impl Descriptor for JsonStringDescriptor {
 				self.0, weak
 			))),
 		}
+	}
+}
+
+pub struct Error;
+impl Error {
+	fn new(_message: String) -> Self {
+		Self
+	}
+}
+impl faible::Error for Error {
+	fn no_variant_recognized() -> Self {
+		unimplemented!()
 	}
 }

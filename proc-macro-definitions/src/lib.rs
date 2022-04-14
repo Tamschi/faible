@@ -387,17 +387,30 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		},
 	];
 
-	let methods = vec![quote_spanned! {Span::mixed_site()=>
-		#vis fn as_variant<'access>(&self) -> ::core::result::Result<
-			#ref_ty #borrow_generics,
-			<#descriptor_type as #faible::Descriptor>::Error,
-		> {
-			//TODO
-			{
-				Err(<<#descriptor_type as #faible::Descriptor>::Error as #faible::Error>::no_variant_recognized())
+	let methods = vec![
+		quote_spanned! {Span::mixed_site()=>
+			#vis fn as_variant<'access>(&'access self) -> ::core::result::Result<
+				#ref_ty #borrow_generics,
+				<#descriptor_type as #faible::Descriptor>::Error,
+			> {
+				//TODO
+				{
+					Err(<<#descriptor_type as #faible::Descriptor>::Error as #faible::Error>::no_variant_recognized())
+				}
 			}
-		}
-	}];
+		},
+		quote_spanned! {Span::mixed_site()=>
+			#vis fn as_variant_mut<'access>(&'access mut self) -> ::core::result::Result<
+				#mut_ty #borrow_generics,
+				<#descriptor_type as #faible::Descriptor>::Error,
+			> {
+				//TODO
+				{
+					Err(<<#descriptor_type as #faible::Descriptor>::Error as #faible::Error>::no_variant_recognized())
+				}
+			}
+		},
+	];
 
 	Processed {
 		attrs,

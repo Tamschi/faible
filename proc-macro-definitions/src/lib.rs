@@ -289,7 +289,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		descriptor,
 		faible,
 		names,
-		no_weak_conversions,
+		no_weak_conversions: _,
 	} = args;
 	let ItemEnum {
 		attrs,
@@ -331,7 +331,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			descriptor,
 			name,
 			names,
-		} = take_args_from_attrs(&args.into(), &mut attrs, errors);
+		} = take_args_from_attrs(&mut attrs, errors);
 
 		owned_variants.push(Variant {
 			attrs: attrs.clone(),
@@ -425,6 +425,8 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				<#descriptor_type as #faible::Descriptor>::Error,
 			> {
 				let strong = #faible::Faible::as_strong(self)?;
+				let descriptor = #descriptor;
+
 				#(
 					if #faible::VariantFilter::predicate(&#variant_descriptors, strong, #variant_names)? {
 						todo!()
@@ -441,9 +443,10 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				<#descriptor_type as #faible::Descriptor>::Error,
 			> {
 				let strong = #faible::Faible::as_strong_mut(self)?;
-				let variant_filter = &#descriptor;
+				let descriptor = #descriptor;
+
 				#(
-					if #faible::VariantFilter::predicate(variant_filter, &*strong, #variant_names)? {
+					if #faible::VariantFilter::predicate(&#variant_descriptors, &*strong, #variant_names)? {
 						todo!()
 					} else
 				)*
@@ -479,32 +482,18 @@ impl Debug for InnerArgs {
 			.finish_non_exhaustive()
 	}
 }
-
-impl From<Args> for InnerArgs {
-	fn from(args: Args) -> Self {
+impl Default for InnerArgs {
+	fn default() -> Self {
 		Self {
-			descriptor: args.descriptor,
+			descriptor: parse_quote_spanned!(Span::mixed_site()=> descriptor),
 			name: None,
-			names: parse_quote_spanned! {Span::mixed_site()=> __faible__name_required},
-		}
-	}
-}
-impl From<&Args> for InnerArgs {
-	fn from(args: &Args) -> Self {
-		Self {
-			descriptor: args.descriptor.clone(),
-			name: None,
-			names: parse_quote_spanned! {Span::mixed_site()=> __faible__name_required},
+			names: parse_quote_spanned!(Span::mixed_site()=> __faible__name_required),
 		}
 	}
 }
 
-fn take_args_from_attrs(
-	args: &InnerArgs,
-	attrs: &mut Vec<Attribute>,
-	errors: &mut Vec<Error>,
-) -> InnerArgs {
-	let mut inner_args = args.clone();
+fn take_args_from_attrs(attrs: &mut Vec<Attribute>, errors: &mut Vec<Error>) -> InnerArgs {
+	let mut inner_args = InnerArgs::default();
 
 	for attr in attrs.e_drain_where(|attr| attr.path.is_ident("faible")) {
 		let Attribute { tokens, .. } = attr;

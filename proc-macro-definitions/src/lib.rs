@@ -474,7 +474,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 					#(#attrs)*
 					#ident: {
 						let descriptor = &#descriptor;
-						#faible::VariantFieldAccess::get(descriptor, strong, #name)?
+						#faible::VariantFieldAccessRef::get(descriptor, &common, #name)?
 					}
 				},
 			);
@@ -484,7 +484,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 					#(#attrs)*
 					#ident: {
 						let descriptor = &#descriptor;
-						#faible::VariantFieldAccess::get_mut(descriptor, strong, #name)?
+						#faible::VariantFieldAccessMut::get_mut(descriptor, &mut common, #name)?
 					}
 				},
 			);
@@ -580,7 +580,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 
 				#({
 					let descriptor = &#variant_descriptors;
-					if #faible::VariantFilter::predicate(descriptor, strong, #variant_names)? {
+					if let ::core::option::Option::Some(common) = #faible::VariantFilter::common(descriptor, strong, #variant_names)? {
 						return Ok(#ref_ty::#variant_idents {
 							#(#variant_field_refs,)*
 						});
@@ -601,8 +601,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 
 				#({
 					let descriptor = &#variant_descriptors;
-					if #faible::VariantFilter::predicate(descriptor, &*strong, #variant_names)? {
-						let strong = strong as *mut _;
+					if let ::core::option::Option::Some(mut common) = #faible::VariantFilter::common_mut(descriptor, strong, #variant_names)? {
 						return Ok(#mut_ty::#variant_idents {
 							#(#variant_field_muts,)*
 						});

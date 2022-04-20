@@ -197,8 +197,12 @@ pub trait UnionFieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
 // 	}
 // }
 
-pub trait VariantFilter<Strong: ?Sized, E, N> {
-	fn predicate(&self, strong: &Strong, name: N) -> Result<bool, E>;
+pub trait VariantFilter<'a, Strong: ?Sized, E, N> {
+	type CommonRef: 'a;
+	type CommonMut: 'a;
+
+	fn common(&self, strong: &'a Strong, name: N) -> Result<Option<Self::CommonRef>, E>;
+	fn common_mut(&self, strong: &'a mut Strong, name: N) -> Result<Option<Self::CommonMut>, E>;
 }
 // impl<Strong: ?Sized, E, N, T> VariantFilter<Strong, E, N> for &T
 // where
@@ -208,18 +212,10 @@ pub trait VariantFilter<Strong: ?Sized, E, N> {
 // 		T::predicate(self, strong, name)
 // 	}
 // }
-pub trait VariantFieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
-	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T, E>;
-	fn get_mut<'a>(&self, strong: *mut Strong, name: N) -> Result<&'a mut T, E>;
-	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
-	where
-		T: Sized;
-	fn insert<'a>(
-		&self,
-		strong: &'a mut Strong,
-		name: N,
-		value: T,
-	) -> Result<(&'a mut T, Option<T>), E>
-	where
-		T: Sized;
+pub trait VariantFieldAccessRef<'a, Common: 'a + ?Sized, E, T: ?Sized, N> {
+	fn get(&self, common: &Common, name: N) -> Result<&'a T, E>;
 }
+pub trait VariantFieldAccessMut<'a, Common: 'a + ?Sized, E, T: ?Sized, N> {
+	fn get_mut(&self, strong: &mut Common, name: N) -> Result<&'a mut T, E>;
+}
+//TODO: Get owned, set and insert. Also to-owned conversions.

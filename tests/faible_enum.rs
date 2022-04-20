@@ -1,4 +1,4 @@
-use faible::{faible, Descriptor, VariantFieldAccess, VariantFilter};
+use faible::{faible, Descriptor, VariantFieldAccessMut, VariantFieldAccessRef, VariantFilter};
 
 const STRUCTURED: &str = "structured";
 
@@ -72,37 +72,30 @@ impl Descriptor for ValueDescriptor {
 	}
 }
 
-impl<Strong, E, N> VariantFilter<Strong, E, N> for ValueDescriptor {
-	fn predicate(&self, _strong: &Strong, _name: N) -> Result<bool, E> {
+impl<'a, Strong: 'a, E, N> VariantFilter<'a, Strong, E, N> for ValueDescriptor {
+	type CommonRef = &'a Strong;
+	type CommonMut = Vec<&'a mut ()>;
+
+	fn common(&self, strong: &'a Strong, name: N) -> Result<Option<Self::CommonRef>, E> {
+		Ok(Some(strong))
+	}
+
+	fn common_mut(&self, strong: &'a mut Strong, name: N) -> Result<Option<Self::CommonMut>, E> {
 		unimplemented!()
 	}
 }
 
-impl<Strong: ?Sized, E, T: ?Sized, N> VariantFieldAccess<Strong, E, T, N> for ValueDescriptor {
-	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T, E> {
+impl<'a, Common: 'a + ?Sized, E, T: ?Sized, N> VariantFieldAccessRef<'a, Common, E, T, N>
+	for ValueDescriptor
+{
+	fn get(&self, common: &Common, name: N) -> Result<&'a T, E> {
 		unimplemented!()
 	}
-
-	fn get_mut<'a>(&self, strong: *mut Strong, name: N) -> Result<&'a mut T, E> {
-		unimplemented!()
-	}
-
-	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
-	where
-		T: Sized,
-	{
-		unimplemented!()
-	}
-
-	fn insert<'a>(
-		&self,
-		strong: &'a mut Strong,
-		name: N,
-		value: T,
-	) -> Result<(&'a mut T, Option<T>), E>
-	where
-		T: Sized,
-	{
+}
+impl<'a, Common: 'a + ?Sized, E, T: ?Sized, N> VariantFieldAccessMut<'a, Common, E, T, N>
+	for ValueDescriptor
+{
+	fn get_mut(&self, common: &mut Common, name: N) -> Result<&'a mut T, E> {
 		unimplemented!()
 	}
 }

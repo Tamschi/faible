@@ -377,6 +377,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			"variant",
 			&ident,
 			index,
+			discriminant.as_ref().map(|discriminant| &discriminant.1),
 			name.as_ref().unwrap_or(parent_names),
 			errors,
 		));
@@ -603,7 +604,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
 				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
-				let name = make_name("field", &ident,index, names, errors);
+				let name = make_name("field", &ident,index, None,names, errors);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
@@ -696,7 +697,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
 				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
-				let name = make_name("field", &ident,index, names, errors);
+				let name = make_name("field", &ident,index, None,names, errors);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
@@ -748,6 +749,7 @@ fn make_name(
 	name_kind: &str,
 	ident: &Ident,
 	index: usize,
+	discriminant: Option<&Expr>,
 	names: &Expr,
 	errors: &mut Vec<Error>,
 ) -> Expr {
@@ -755,6 +757,7 @@ fn make_name(
 		name_kind: &'a str,
 		ident: &'a Ident,
 		index: usize,
+		discriminant: Option<&'a Expr>,
 		errors: &'a mut Vec<Error>,
 	}
 	impl VisitMut for NameVisitor<'_> {
@@ -774,6 +777,26 @@ fn make_name(
 						lit: Lit::Int(LitInt::new(&self.index.to_string(), self.ident.span())),
 					});
 				}
+
+				Expr::Path(ExprPath {
+					attrs,
+					qself: None,
+					path,
+				}) if path
+					.get_ident()
+					.map(|ident| ident == "discriminant")
+					.unwrap_or_default() =>
+				{
+					if let Some(discriminant) = self.discriminant {
+						*i = discriminant.clone();
+					} else {
+						self.errors.push(Error::new(
+							self.ident.span(),
+							"Discriminant required to use `discriminant` name interpolation.",
+						))
+					}
+				}
+
 				_ => syn::visit_mut::visit_expr_mut(self, i),
 			}
 		}
@@ -836,7 +859,7 @@ Replaced literals are: "kebab_case", "lowerCamelCase", "PascalCase", "SHOUTY_KEB
 					}
 					_ => {
 						self.errors.push(Error::new(i.span(), "Unrecognised name identifier. (Prefix it with `_` to use it literally.)
-Replaced identifiers are: `kebab_case`, `lowerCamelCase`, `PascalCase`, `SHOUTY_KEBAB_CASE`, `SHOUTY_SNAKE_CASE`, `SHOUTY_SNEK_CASE`, `snake_case`, `snek_case`, `Title_Case`, `UpperCamelCase`, `verbatim`."));
+Replaced identifiers are: `discriminant`, `index`, `kebab_case`, `lowerCamelCase`, `PascalCase`, `SHOUTY_KEBAB_CASE`, `SHOUTY_SNAKE_CASE`, `SHOUTY_SNEK_CASE`, `snake_case`, `snek_case`, `Title_Case`, `UpperCamelCase`, `verbatim`."));
 						return;
 					}
 				},
@@ -850,6 +873,7 @@ Replaced identifiers are: `kebab_case`, `lowerCamelCase`, `PascalCase`, `SHOUTY_
 		name_kind,
 		ident,
 		index,
+		discriminant,
 		errors,
 	}
 	.visit_expr_mut(&mut name);

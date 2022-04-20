@@ -20,6 +20,13 @@ pub enum Value {
 	Structured { a: u8, b: u16 },
 }
 
+#[faible(ValueDescriptor::new(), no_weak_conversions, names = discriminant)]
+pub enum Discriminated {
+	A = 1,
+	B = 2,
+	C = 3,
+}
+
 #[faible(ValueDescriptor::new(), no_weak_conversions)]
 pub enum Empty {}
 

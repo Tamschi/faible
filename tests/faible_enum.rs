@@ -2,7 +2,11 @@ use faible::{faible, Descriptor, VariantFieldAccess, VariantFilter};
 
 const STRUCTURED: &str = "structured";
 
-#[faible(ValueDescriptor::new(), no_weak_conversions)]
+#[faible(
+	ValueDescriptor::new(),
+	nested_names = "lowerCamelCase",
+	no_weak_conversions
+)]
 pub enum Value {
 	#[faible(_, name = "_null")]
 	Null,
@@ -16,7 +20,7 @@ pub enum Value {
 	#[faible(_, name = 0, names = index)]
 	Pointer(*mut ()),
 
-	#[faible(_, name = _STRUCTURED, names = "lowerCamelCase")]
+	#[faible(_, name = _STRUCTURED)]
 	Structured { a: u8, b: u16 },
 }
 

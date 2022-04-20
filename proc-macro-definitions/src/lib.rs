@@ -104,6 +104,13 @@ fn args_parser(errors: &mut Vec<Error>) -> impl '_ + FnOnce(ParseStream) -> Resu
 						.insist::<Token![=]>(errors)
 						.and_then(|_| input.insist(errors))
 						.then_set(&mut args.names);
+				} else if lookahead.peek(kw::nested_names) {
+					input.parse::<kw::nested_names>().expect("unreachable");
+
+					input
+						.insist::<Token![=]>(errors)
+						.and_then(|_| input.insist(errors))
+						.then_set(&mut args.nested_names);
 				} else if lookahead.peek(kw::no_weak_conversions) {
 					input
 						.parse::<kw::no_weak_conversions>()

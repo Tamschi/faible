@@ -11,9 +11,9 @@ pub enum Value {
 	None(),
 
 	#[faible(_, name = "_bool")]
-	Bool(bool),
+	Bool(#[faible(_, name = index)] bool),
 
-	#[faible(_, name = 0, names = "lowerCamelCase")]
+	#[faible(_, name = 0, names = index)]
 	Pointer(*mut ()),
 
 	#[faible(_, name = _STRUCTURED, names = "lowerCamelCase")]

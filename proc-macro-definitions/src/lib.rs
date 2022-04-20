@@ -1,5 +1,3 @@
-use std::{fmt::Debug, iter, panic};
-
 use call2_for_syn::{call2_allow_incomplete, call2_strict, Incomplete};
 use heck::{
 	ToKebabCase, ToLowerCamelCase, ToPascalCase, ToShoutyKebabCase, ToShoutySnakeCase,
@@ -9,14 +7,15 @@ use itoa::Buffer;
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use quote::quote_spanned;
+use std::{fmt::Debug, panic};
 use syn::{
 	parse::{Parse, ParseBuffer, ParseStream},
 	parse_quote_spanned,
-	punctuated::{Pair, Punctuated},
 	spanned::Spanned,
+	token::Group,
 	visit_mut::{self, VisitMut},
-	Attribute, Error, Expr, ExprLit, ExprPath, Field, Fields, Generics, Item, ItemEnum, ItemStruct,
-	ItemUnion, Lit, LitInt, LitStr, Path, Result, Token, Variant, Visibility,
+	Attribute, Error, Expr, ExprGroup, ExprLit, ExprPath, Field, Fields, Generics, Item, ItemEnum,
+	ItemStruct, ItemUnion, Lit, LitInt, LitStr, Path, Result, Token, Variant, Visibility,
 };
 use tap::Pipe;
 use vec_drain_where::VecDrainWhereExt;
@@ -27,6 +26,7 @@ mod kw {
 	custom_keyword!(faible);
 	custom_keyword!(name);
 	custom_keyword!(names);
+	custom_keyword!(nested_names);
 	custom_keyword!(no_weak_conversions);
 }
 
@@ -55,6 +55,7 @@ struct Args {
 	descriptor: Expr,
 	faible: Path,
 	names: Expr,
+	nested_names: Expr,
 	no_weak_conversions: bool,
 }
 impl Default for Args {
@@ -63,6 +64,7 @@ impl Default for Args {
 			descriptor: parse_quote_spanned! {Span::mixed_site()=> ()},
 			faible: parse_quote_spanned! {Span::mixed_site()=> ::faible},
 			names: parse_quote_spanned! {Span::mixed_site()=> __faible__name_required},
+			nested_names: parse_quote_spanned! {Span::mixed_site()=> __faible__name_required},
 			no_weak_conversions: false,
 		}
 	}
@@ -155,6 +157,7 @@ fn implement(args: Args, input: Item, errors: &mut Vec<Error>) -> TokenStream {
 		descriptor,
 		faible,
 		names: _,
+		nested_names: _,
 		no_weak_conversions,
 	} = args;
 
@@ -292,6 +295,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		descriptor,
 		faible,
 		names,
+		nested_names,
 		no_weak_conversions: _,
 	} = args;
 	let ItemEnum {
@@ -325,7 +329,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 		Variant {
 			mut attrs,
 			ident,
-			fields,
+			mut fields,
 			discriminant,
 		},
 	) in variants.into_iter().enumerate()
@@ -336,6 +340,121 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			name,
 			names,
 		} = take_args_from_attrs(&mut attrs, errors);
+
+		variant_descriptors.push(descriptor);
+		variant_names.push(make_name(
+			"variant",
+			false,
+			ident.span(),
+			Some(&ident),
+			index,
+			discriminant.as_ref().map(|discriminant| &discriminant.1),
+			name.as_ref().unwrap_or(parent_names),
+			errors,
+		));
+		variant_idents.push(ident.clone());
+
+		struct FieldInfo<'a> {
+			attrs: &'a mut Vec<Attribute>,
+			ident: Expr,
+			descriptor: Expr,
+			name: Expr,
+		}
+		let field_infos = match &mut fields {
+			Fields::Unit => vec![],
+			Fields::Named(named) => named
+				.named
+				.iter_mut()
+				.enumerate()
+				.map(
+					|(
+						index,
+						Field {
+							attrs,
+							vis: _,
+							ident,
+							colon_token: _,
+							ty: _,
+						},
+					)| {
+						let parent_names = &names;
+						let InnerArgs {
+							descriptor,
+							name,
+							names, //TODO: Ensure empty.
+						} = take_args_from_attrs(attrs, errors);
+						FieldInfo {
+							attrs,
+							ident: parse_quote_spanned!(ident.span().resolved_at(Span::mixed_site())=> #ident),
+							descriptor,
+							name: make_name(
+								"field",
+								true,
+								ident.span(),
+								ident.as_ref(),
+								index,
+								None,
+								name.as_ref()
+									.or_else(|| parent_names.as_ref())
+									.unwrap_or(nested_names),
+								errors,
+							),
+						}
+					},
+				)
+				.collect(),
+			Fields::Unnamed(unnamed) => unnamed
+				.unnamed
+				.iter_mut()
+				.enumerate()
+				.map(
+					|(
+						index,
+						Field {
+							attrs,
+							vis,
+							ident,
+							colon_token,
+							ty,
+						},
+					)| {
+						let parent_names = &names;
+						let InnerArgs {
+							descriptor,
+							name,
+							names, //TODO: Ensure empty.
+						} = take_args_from_attrs(attrs, errors);
+						FieldInfo {
+							attrs,
+							ident: parse_quote_spanned!(ty.span().resolved_at(Span::mixed_site())=> #index),
+							descriptor,
+							name: make_name(
+								"field",
+								true,
+								ty.span(),
+								None,
+								index,
+								None,
+								name.as_ref()
+									.or_else(|| parent_names.as_ref())
+									.unwrap_or(nested_names),
+								errors,
+							),
+						}
+					},
+				)
+				.collect(),
+		};
+
+		for FieldInfo {
+			attrs,
+			ident,
+			descriptor,
+			name,
+		} in field_infos
+		{
+			//TODO
+		}
 
 		owned_variants.push(Variant {
 			attrs: attrs.clone(),
@@ -375,103 +494,6 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			},
 			discriminant: discriminant.clone(),
 		});
-
-		variant_descriptors.push(descriptor);
-		variant_names.push(make_name(
-			"variant",
-			ident.span(),
-			Some(&ident),
-			index,
-			discriminant.as_ref().map(|discriminant| &discriminant.1),
-			name.as_ref().unwrap_or(parent_names),
-			errors,
-		));
-		variant_idents.push(ident);
-
-		struct FieldInfo {
-			attrs: Vec<Attribute>,
-			ident: Expr,
-			descriptor: Expr,
-			name: Expr,
-		}
-		let fields = match fields {
-			Fields::Unit => vec![],
-			Fields::Named(named) => named
-				.named
-				.into_iter()
-				.enumerate()
-				.map(
-					|(
-						index,
-						Field {
-							mut attrs,
-							vis,
-							ident,
-							colon_token,
-							ty,
-						},
-					)| {
-						let parent_names = &names;
-						let InnerArgs {
-							descriptor,
-							name,
-							names,
-						} = take_args_from_attrs(&mut attrs, errors);
-						FieldInfo {
-							attrs,
-							ident: parse_quote_spanned!(ident.span().resolved_at(Span::mixed_site())=> #ident),
-							descriptor,
-							name: make_name(
-								"field",
-								ident.span(),
-								ident.as_ref(),
-								index,
-								None,
-								name.as_ref().unwrap_or(parent_names),
-								errors,
-							),
-						}
-					},
-				)
-				.collect(),
-			Fields::Unnamed(unnamed) => unnamed
-				.unnamed
-				.into_iter()
-				.enumerate()
-				.map(
-					|(
-						index,
-						Field {
-							mut attrs,
-							vis,
-							ident,
-							colon_token,
-							ty,
-						},
-					)| {
-						let InnerArgs {
-							descriptor,
-							name,
-							names,
-						} = take_args_from_attrs(&mut attrs, errors);
-						FieldInfo {
-							attrs,
-							ident: parse_quote_spanned!(ty.span().resolved_at(Span::mixed_site())=> #index),
-							descriptor,
-							name: make_name(
-								"field",
-								ty.span(),
-								None,
-								index,
-								None,
-								name.as_ref().unwrap_or(parent_names),
-								errors,
-							),
-						}
-					},
-				)
-				.collect(),
-		};
 	}
 
 	let borrow_generics = {
@@ -516,13 +538,14 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				<#descriptor_type as #faible::Descriptor>::Error,
 			> {
 				let strong = #faible::Faible::as_strong(self)?;
-				let descriptor = #descriptor;
+				let descriptor = &#descriptor;
 
-				#(
-					if #faible::VariantFilter::predicate(&#variant_descriptors, strong, #variant_names)? {
-						Ok(#ref_ty::#variant_idents{})
-					} else
-				)*
+				#({
+					let descriptor = &#variant_descriptors;
+					if #faible::VariantFilter::predicate(descriptor, strong, #variant_names)? {
+						return Ok(#ref_ty::#variant_idents{});
+					}
+				})*
 				{
 					Err(<<#descriptor_type as #faible::Descriptor>::Error as #faible::Error>::no_variant_recognized())
 				}
@@ -534,13 +557,14 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				<#descriptor_type as #faible::Descriptor>::Error,
 			> {
 				let strong = #faible::Faible::as_strong_mut(self)?;
-				let descriptor = #descriptor;
+				let descriptor = &#descriptor;
 
-				#(
-					if #faible::VariantFilter::predicate(&#variant_descriptors, &*strong, #variant_names)? {
-						Ok(#mut_ty::#variant_idents{})
-					} else
-				)*
+				#({
+					let descriptor = &#variant_descriptors;
+					if #faible::VariantFilter::predicate(descriptor, &*strong, #variant_names)? {
+						return Ok(#mut_ty::#variant_idents{});
+					}
+				})*
 				{
 					Err(<<#descriptor_type as #faible::Descriptor>::Error as #faible::Error>::no_variant_recognized())
 				}
@@ -564,7 +588,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 struct InnerArgs {
 	descriptor: Expr,
 	name: Option<Expr>,
-	names: Expr,
+	names: Option<Expr>,
 }
 impl Debug for InnerArgs {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -576,9 +600,9 @@ impl Debug for InnerArgs {
 impl Default for InnerArgs {
 	fn default() -> Self {
 		Self {
-			descriptor: parse_quote_spanned!(Span::mixed_site()=> descriptor),
+			descriptor: parse_quote_spanned!(Span::mixed_site()=> *descriptor),
 			name: None,
-			names: parse_quote_spanned!(Span::mixed_site()=> __faible__name_required),
+			names: None,
 		}
 	}
 }
@@ -620,7 +644,10 @@ fn take_args_from_attrs(attrs: &mut Vec<Attribute>, errors: &mut Vec<Error>) -> 
 				} else if lookahead.peek(kw::names) {
 					input.parse::<kw::names>().expect("unreachable");
 					input.insist::<Token![=]>(errors);
-					input.insist(errors).then_set(&mut inner_args.names);
+					input
+						.insist(errors)
+						.map(Some)
+						.then_set(&mut inner_args.names);
 				} else {
 					errors.push(lookahead.error())
 				}
@@ -643,6 +670,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 		descriptor,
 		faible,
 		names,
+		nested_names: _, //TODO: Ensure unset.
 		no_weak_conversions: _,
 	} = args;
 	let ItemStruct {
@@ -684,7 +712,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
 				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
-				let name = make_name("field",ident.span(), Some(&ident),index, None,names, errors);
+				let name = make_name("field",false,ident.span(), Some(&ident),index, None,names, errors);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
@@ -737,6 +765,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 		descriptor,
 		faible,
 		names,
+		nested_names: _, //TODO: Ensure unset.
 		no_weak_conversions: _,
 	} = args;
 	let ItemUnion {
@@ -777,7 +806,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
 				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
-				let name = make_name("field", ident.span(),Some(&ident),index, None,names, errors);
+				let name = make_name("field", false, ident.span(), Some(&ident), index, None, names, errors);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
@@ -825,8 +854,10 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_name(
 	name_kind: &str,
+	nested: bool,
 	span: Span,
 	ident: Option<&Ident>,
 	index: usize,
@@ -836,6 +867,7 @@ fn make_name(
 ) -> Expr {
 	struct NameVisitor<'a> {
 		name_kind: &'a str,
+		nested: bool,
 		span: Span,
 		ident: Option<&'a Ident>,
 		index: usize,
@@ -870,7 +902,11 @@ fn make_name(
 					.unwrap_or_default() =>
 				{
 					if let Some(discriminant) = self.discriminant {
-						*i = discriminant.clone();
+						*i = Expr::Group(ExprGroup {
+							attrs: attrs.clone(),
+							expr: Box::new(discriminant.clone()),
+							group_token: Group(path.span()),
+						});
 					} else {
 						self.errors.push(Error::new(
 							self.span,
@@ -884,30 +920,31 @@ fn make_name(
 		}
 
 		fn visit_lit_str_mut(&mut self, i: &mut syn::LitStr) {
-			if !i.value().starts_with('_') && self.ident.is_none() {
-				self.errors.push(Error::new(i.span(), "Cannot interpolate name of unnamed item. (Prefix with `_` for a literal literal.)"));
-				visit_mut::visit_lit_str_mut(self, i);
-				return;
-			}
-
-			let name = self.ident.expect("unreachable").to_string();
+			let name = || self.ident.expect("unreachable").to_string();
 			*i = LitStr::new(
 				&match i.value().as_str() {
-					"kebab-case" => name.to_kebab_case(),
-					"lowerCamelCase" => name.to_lower_camel_case(),
-					"PascalCase" => name.to_pascal_case(),
-					"SHOUTY-KEBAB-CASE" => name.to_shouty_kebab_case(),
-					"SHOUTY_SNAKE_CASE" => name.to_shouty_snake_case(),
-					"SHOUTY_SNEK_CASE" => name.TO_SHOUTY_SNEK_CASE(),
-					"snake_case" => name.to_snake_case(),
-					"snek_case" => name.to_snek_case(),
-					"Title Case" => name.to_title_case(),
-					"UpperCamelCase" => name.to_upper_camel_case(),
-					"verbatim" => name,
 					name if name.starts_with('_') => {
 						*i = LitStr::new(name.strip_prefix('_').expect("unreachable"), i.span());
 						return;
 					}
+
+					_ if self.ident.is_none() => {
+						self.errors.push(Error::new(i.span(), "Cannot interpolate name of unnamed item. (Prefix with `_` for a literal literal.)"));
+						visit_mut::visit_lit_str_mut(self, i);
+						return;
+					}
+
+					"kebab-case" => name().to_kebab_case(),
+					"lowerCamelCase" => name().to_lower_camel_case(),
+					"PascalCase" => name().to_pascal_case(),
+					"SHOUTY-KEBAB-CASE" => name().to_shouty_kebab_case(),
+					"SHOUTY_SNAKE_CASE" => name().to_shouty_snake_case(),
+					"SHOUTY_SNEK_CASE" => name().TO_SHOUTY_SNEK_CASE(),
+					"snake_case" => name().to_snake_case(),
+					"snek_case" => name().to_snek_case(),
+					"Title Case" => name().to_title_case(),
+					"UpperCamelCase" => name().to_upper_camel_case(),
+					"verbatim" => name(),
 					_ => {
 						self.errors.push(Error::new(i.span(), r#"Unrecognised name string literal. (Prefix its value with `_` to use it literally.)
 Replaced literals are: "kebab_case", "lowerCamelCase", "PascalCase", "SHOUTY_KEBAB_CASE", "SHOUTY_SNAKE_CASE", "SHOUTY_SNEK_CASE", "snake_case", "snek_case", "Title_Case", "UpperCamelCase", "verbatim"."#));
@@ -919,15 +956,29 @@ Replaced literals are: "kebab_case", "lowerCamelCase", "PascalCase", "SHOUTY_KEB
 		}
 
 		fn visit_ident_mut(&mut self, i: &mut Ident) {
-			if !i.to_string().starts_with('_') && self.ident.is_none() {
-				self.errors.push(Error::new(i.span(), "Cannot interpolate name of unnamed item. (Prefix with `_` for a literal identifier.)"));
-				visit_mut::visit_ident_mut(self, i);
-				return;
-			}
-
 			let name = || self.ident.expect("unreachable").to_string();
 			*i = Ident::new(
 				&match i.to_string().as_str() {
+					"__faible__name_required" => {
+						self.errors.push(Error::new(self.span, &format!("A {} name expression is required. (`#[faible(…, names = <expr>)]`, try identifiers and string literals for more information.)", self.name_kind)));
+						*i = Ident::new(
+							"__faible__name_required",
+							self.span.resolved_at(Span::mixed_site()),
+						);
+						return;
+					}
+
+					name if name.starts_with('_') => {
+						*i = Ident::new(name.strip_prefix('_').expect("unreachable"), i.span());
+						return;
+					}
+
+					_ if self.ident.is_none() => {
+						self.errors.push(Error::new(i.span(), "Cannot interpolate name of unnamed item. (Prefix with `_` for a literal identifier.)"));
+						visit_mut::visit_ident_mut(self, i);
+						return;
+					}
+
 					"kebab_case" => name().to_kebab_case(),
 					"lowerCamelCase" => name().to_lower_camel_case(),
 					"PascalCase" => name().to_pascal_case(),
@@ -939,18 +990,6 @@ Replaced literals are: "kebab_case", "lowerCamelCase", "PascalCase", "SHOUTY_KEB
 					"Title_Case" => name().to_title_case(),
 					"UpperCamelCase" => name().to_upper_camel_case(),
 					"verbatim" => name(),
-					"__faible__name_required" => {
-						self.errors.push(Error::new(self.span, &format!("A {} name expression is required. (`#[faible(…, names = <expr>)]`, try identifiers and string literals for more information.)", self.name_kind)));
-						*i = Ident::new(
-							"__faible__name_required",
-							self.span.resolved_at(Span::mixed_site()),
-						);
-						return;
-					}
-					name if name.starts_with('_') => {
-						*i = Ident::new(name.strip_prefix('_').expect("unreachable"), i.span());
-						return;
-					}
 					_ => {
 						self.errors.push(Error::new(i.span(), "Unrecognised name identifier. (Prefix it with `_` to use it literally.)
 Replaced identifiers are: `discriminant`, `index`, `kebab_case`, `lowerCamelCase`, `PascalCase`, `SHOUTY_KEBAB_CASE`, `SHOUTY_SNAKE_CASE`, `SHOUTY_SNEK_CASE`, `snake_case`, `snek_case`, `Title_Case`, `UpperCamelCase`, `verbatim`."));
@@ -965,6 +1004,7 @@ Replaced identifiers are: `discriminant`, `index`, `kebab_case`, `lowerCamelCase
 	let mut name = names.clone();
 	NameVisitor {
 		name_kind,
+		nested,
 		span,
 		ident,
 		index,

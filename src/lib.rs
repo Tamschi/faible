@@ -118,6 +118,37 @@ pub trait FieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
 	where
 		T: Sized;
 }
+// impl<Strong: ?Sized, E, T: ?Sized, N, U> FieldAccess<Strong, E, T, N> for &U
+// where
+// 	U: FieldAccess<Strong, E, T, N>,
+// {
+// 	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T, E> {
+// 		U::get(self, strong, name)
+// 	}
+
+// 	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<&'a mut T, E> {
+// 		U::get_mut(self, strong, name)
+// 	}
+
+// 	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
+// 	where
+// 		T: Sized,
+// 	{
+// 		U::set(self, strong, name, value)
+// 	}
+
+// 	fn insert<'a>(
+// 		&self,
+// 		strong: &'a mut Strong,
+// 		name: N,
+// 		value: T,
+// 	) -> Result<(&'a mut T, Option<T>), E>
+// 	where
+// 		T: Sized,
+// 	{
+// 		U::insert(self, strong, name, value)
+// 	}
+// }
 
 pub trait UnionFieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
 	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<Option<&'a T>, E>;
@@ -134,7 +165,46 @@ pub trait UnionFieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
 	where
 		T: Sized;
 }
+// impl<Strong: ?Sized, E, T: ?Sized, N, U> UnionFieldAccess<Strong, E, T, N> for &U
+// where
+// 	U: UnionFieldAccess<Strong, E, T, N>,
+// {
+// 	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<Option<&'a T>, E> {
+// 		U::get(self, strong, name)
+// 	}
+
+// 	fn get_mut<'a>(&self, strong: &'a mut Strong, name: N) -> Result<Option<&'a mut T>, E> {
+// 		U::get_mut(self, strong, name)
+// 	}
+
+// 	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
+// 	where
+// 		T: Sized,
+// 	{
+// 		U::set(self, strong, name, value)
+// 	}
+
+// 	fn insert<'a>(
+// 		&self,
+// 		strong: &'a mut Strong,
+// 		name: N,
+// 		value: T,
+// 	) -> Result<(&'a mut T, Option<T>), E>
+// 	where
+// 		T: Sized,
+// 	{
+// 		U::insert(self, strong, name, value)
+// 	}
+// }
 
 pub trait VariantFilter<Strong: ?Sized, E, N> {
 	fn predicate(&self, strong: &Strong, name: N) -> Result<bool, E>;
 }
+// impl<Strong: ?Sized, E, N, T> VariantFilter<Strong, E, N> for &T
+// where
+// 	T: VariantFilter<Strong, E, N>,
+// {
+// 	fn predicate(&self, strong: &Strong, name: N) -> Result<bool, E> {
+// 		T::predicate(self, strong, name)
+// 	}
+// }

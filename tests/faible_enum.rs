@@ -1,17 +1,19 @@
-use faible::{faible, Descriptor};
+use faible::{faible, Descriptor, VariantFilter};
+
+const STRUCTURED: &str = "structured";
 
 #[faible(ValueDescriptor::new(), no_weak_conversions)]
 pub enum Value {
-	#[faible(_, name = "null")]
+	#[faible(_, name = "_null")]
 	Null,
 
-	#[faible(_, name = "bool")]
+	#[faible(_, name = "_bool")]
 	Bool(bool),
 
-	#[faible(_, names = "lowerCamelCase")]
+	#[faible(_, name = 0, names = "lowerCamelCase")]
 	Pointer(*mut ()),
 
-	#[faible(_, names = "lowerCamelCase")]
+	#[faible(_, name = _STRUCTURED, names = "lowerCamelCase")]
 	Structured { a: u8, b: u16 },
 }
 
@@ -53,6 +55,12 @@ impl Descriptor for ValueDescriptor {
 
 	fn try_weak_into_strong(&self, weak: Self::Weak) -> Result<Self::Strong, Self::Error> {
 		Ok(weak)
+	}
+}
+
+impl<Strong, E, N> VariantFilter<Strong, E, N> for ValueDescriptor {
+	fn predicate(&self, _strong: &Strong, _name: N) -> Result<bool, E> {
+		unimplemented!()
 	}
 }
 

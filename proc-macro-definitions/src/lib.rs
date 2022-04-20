@@ -14,8 +14,8 @@ use syn::{
 	spanned::Spanned,
 	token::Group,
 	visit_mut::{self, VisitMut},
-	Attribute, Error, Expr, ExprGroup, ExprLit, ExprPath, Field, Fields, Generics, Item, ItemEnum,
-	ItemStruct, ItemUnion, Lit, LitInt, LitStr, Path, Result, Token, Variant, Visibility,
+	Attribute, Error, Expr, ExprGroup, ExprLit, ExprPath, Field, Fields, Generics, Index, Item,
+	ItemEnum, ItemStruct, ItemUnion, Lit, LitInt, LitStr, Path, Result, Token, Variant, Visibility,
 };
 use tap::Pipe;
 use vec_drain_where::VecDrainWhereExt;
@@ -324,6 +324,9 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 	let mut variant_names = vec![];
 	let mut variant_idents = vec![];
 
+	let mut variant_field_refs = vec![];
+	let mut variant_field_muts = vec![];
+
 	for (
 		index,
 		Variant {
@@ -426,7 +429,10 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 						} = take_args_from_attrs(attrs, errors);
 						FieldInfo {
 							attrs,
-							ident: parse_quote_spanned!(ty.span().resolved_at(Span::mixed_site())=> #index),
+							ident: {
+								let index = Index::from(index);
+								parse_quote_spanned!(ty.span().resolved_at(Span::mixed_site())=> #index)
+							},
 							descriptor,
 							name: make_name(
 								"field",
@@ -436,7 +442,7 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 								index,
 								None,
 								name.as_ref()
-									.or_else(|| parent_names.as_ref())
+									.or(parent_names.as_ref())
 									.unwrap_or(nested_names),
 								errors,
 							),
@@ -446,6 +452,9 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				.collect(),
 		};
 
+		let mut field_refs = vec![];
+		let mut field_muts = vec![];
+
 		for FieldInfo {
 			attrs,
 			ident,
@@ -453,7 +462,25 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			name,
 		} in field_infos
 		{
-			//TODO
+			field_refs.push(
+				quote_spanned! {ident.span().resolved_at(Span::mixed_site())=>
+					#(#attrs)*
+					#ident: {
+						let descriptor = &#descriptor;
+						#faible::VariantFieldAccess::get(descriptor, strong, #name)?
+					}
+				},
+			);
+
+			field_muts.push(
+				quote_spanned! {ident.span().resolved_at(Span::mixed_site())=>
+					#(#attrs)*
+					#ident: {
+						let descriptor = &#descriptor;
+						#faible::VariantFieldAccess::get_mut(descriptor, strong, #name)?
+					}
+				},
+			);
 		}
 
 		owned_variants.push(Variant {
@@ -479,6 +506,8 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			discriminant: discriminant.clone(),
 		});
 
+		variant_field_refs.push(field_refs);
+
 		mut_variants.push(Variant {
 			attrs: attrs.clone(),
 			ident: ident.clone(),
@@ -494,6 +523,8 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			},
 			discriminant: discriminant.clone(),
 		});
+
+		variant_field_muts.push(field_muts);
 	}
 
 	let borrow_generics = {
@@ -543,7 +574,9 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				#({
 					let descriptor = &#variant_descriptors;
 					if #faible::VariantFilter::predicate(descriptor, strong, #variant_names)? {
-						return Ok(#ref_ty::#variant_idents{});
+						return Ok(#ref_ty::#variant_idents {
+							#(#variant_field_refs,)*
+						});
 					}
 				})*
 				{
@@ -562,7 +595,10 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				#({
 					let descriptor = &#variant_descriptors;
 					if #faible::VariantFilter::predicate(descriptor, &*strong, #variant_names)? {
-						return Ok(#mut_ty::#variant_idents{});
+						let strong = strong as *mut _;
+						return Ok(#mut_ty::#variant_idents {
+							#(#variant_field_muts,)*
+						});
 					}
 				})*
 				{
@@ -867,7 +903,7 @@ fn make_name(
 ) -> Expr {
 	struct NameVisitor<'a> {
 		name_kind: &'a str,
-		nested: bool,
+		nested: bool, //TODO: Adjust error messages.
 		span: Span,
 		ident: Option<&'a Ident>,
 		index: usize,

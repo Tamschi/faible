@@ -1,4 +1,4 @@
-use faible::{faible, Descriptor, VariantFilter};
+use faible::{faible, Descriptor, VariantFieldAccess, VariantFilter};
 
 const STRUCTURED: &str = "structured";
 
@@ -70,6 +70,35 @@ impl Descriptor for ValueDescriptor {
 
 impl<Strong, E, N> VariantFilter<Strong, E, N> for ValueDescriptor {
 	fn predicate(&self, _strong: &Strong, _name: N) -> Result<bool, E> {
+		unimplemented!()
+	}
+}
+
+impl<Strong: ?Sized, E, T: ?Sized, N> VariantFieldAccess<Strong, E, T, N> for ValueDescriptor {
+	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T, E> {
+		unimplemented!()
+	}
+
+	fn get_mut<'a>(&self, strong: *mut Strong, name: N) -> Result<&'a mut T, E> {
+		unimplemented!()
+	}
+
+	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
+	where
+		T: Sized,
+	{
+		unimplemented!()
+	}
+
+	fn insert<'a>(
+		&self,
+		strong: &'a mut Strong,
+		name: N,
+		value: T,
+	) -> Result<(&'a mut T, Option<T>), E>
+	where
+		T: Sized,
+	{
 		unimplemented!()
 	}
 }

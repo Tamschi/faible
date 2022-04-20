@@ -208,3 +208,18 @@ pub trait VariantFilter<Strong: ?Sized, E, N> {
 // 		T::predicate(self, strong, name)
 // 	}
 // }
+pub trait VariantFieldAccess<Strong: ?Sized, E, T: ?Sized, N> {
+	fn get<'a>(&self, strong: &'a Strong, name: N) -> Result<&'a T, E>;
+	fn get_mut<'a>(&self, strong: *mut Strong, name: N) -> Result<&'a mut T, E>;
+	fn set(&self, strong: &mut Strong, name: N, value: T) -> Result<(), E>
+	where
+		T: Sized;
+	fn insert<'a>(
+		&self,
+		strong: &'a mut Strong,
+		name: N,
+		value: T,
+	) -> Result<(&'a mut T, Option<T>), E>
+	where
+		T: Sized;
+}

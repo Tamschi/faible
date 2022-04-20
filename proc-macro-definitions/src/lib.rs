@@ -79,7 +79,7 @@ fn args_parser(errors: &mut Vec<Error>) -> impl '_ + FnOnce(ParseStream) -> Resu
 			if input.is_empty() {
 				break;
 			}
-			
+
 			loop {
 				if input.is_empty() {
 					break;

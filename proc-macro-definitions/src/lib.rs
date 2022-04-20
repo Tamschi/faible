@@ -76,7 +76,15 @@ fn args_parser(errors: &mut Vec<Error>) -> impl '_ + FnOnce(ParseStream) -> Resu
 			.expect("infallible")
 			.is_some()
 		{
+			if input.is_empty() {
+				break;
+			}
+			
 			loop {
+				if input.is_empty() {
+					break;
+				}
+
 				let lookahead = input.lookahead1();
 				if lookahead.peek(kw::faible) {
 					input.parse::<kw::faible>().expect("unreachable");
@@ -515,6 +523,10 @@ fn take_args_from_attrs(
 				.expect("infallible")
 				.is_some()
 			{
+				if input.is_empty() {
+					break;
+				}
+
 				let lookahead = input.lookahead1();
 
 				if lookahead.peek(kw::name) {

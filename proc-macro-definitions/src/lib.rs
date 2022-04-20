@@ -14,8 +14,8 @@ use syn::{
 	parse_quote_spanned,
 	spanned::Spanned,
 	visit_mut::VisitMut,
-	Attribute, Error, Expr, Field, Generics, Item, ItemEnum, ItemStruct, ItemUnion, LitStr, Path,
-	Result, Token, Variant, Visibility,
+	Attribute, Error, Expr, ExprLit, ExprPath, Field, Generics, Item, ItemEnum, ItemStruct,
+	ItemUnion, Lit, LitInt, LitStr, Path, Result, Token, Variant, Visibility,
 };
 use tap::Pipe;
 use vec_drain_where::VecDrainWhereExt;
@@ -305,10 +305,11 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 	let mut ref_variants = vec![];
 	let mut mut_variants = vec![];
 
+	let mut variant_descriptors = vec![];
 	let mut variant_names = vec![];
 
 	for (
-		i,
+		index,
 		Variant {
 			mut attrs,
 			ident,
@@ -363,9 +364,11 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 			discriminant: discriminant.clone(),
 		});
 
+		variant_descriptors.push(descriptor);
 		variant_names.push(make_name(
 			"variant",
 			&ident,
+			index,
 			name.as_ref().unwrap_or(parent_names),
 			errors,
 		));
@@ -413,9 +416,8 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 				<#descriptor_type as #faible::Descriptor>::Error,
 			> {
 				let strong = #faible::Faible::as_strong(self)?;
-				let variant_filter = &#descriptor;
 				#(
-					if #faible::VariantFilter::predicate(variant_filter, strong, #variant_names)? {
+					if #faible::VariantFilter::predicate(&#variant_descriptors, strong, #variant_names)? {
 						todo!()
 					} else
 				)*
@@ -516,7 +518,6 @@ fn take_args_from_attrs(
 				let lookahead = input.lookahead1();
 
 				if lookahead.peek(kw::name) {
-					dbg!();
 					let name = input.parse::<kw::name>().expect("unreachable");
 					if inner_args.name.is_some() {
 						errors.push(Error::new(name.span, "Duplicate name definition."))
@@ -569,7 +570,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 		.enumerate()
 		.map(
 			|(
-				i,
+				index,
 				Field {
 					attrs,
 					vis,
@@ -578,7 +579,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 					ty,
 				},
 			)| {
-				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(i), ty.span()));
+				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(index), ty.span()));
 				let ident_string = ident.to_string();
 
 				let get = if ident_string.starts_with(|c: char| c.is_ascii_digit()) {
@@ -590,7 +591,7 @@ fn process_struct(struct_: ItemStruct, args: &Args, errors: &mut Vec<Error>) -> 
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
 				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
-				let name = make_name("field", &ident, names, errors);
+				let name = make_name("field", &ident,index, names, errors);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
@@ -662,7 +663,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 		.enumerate()
 		.map(
 			|(
-				i,
+				index,
 				Field {
 					attrs,
 					vis,
@@ -671,7 +672,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 					ty,
 				},
 			)| {
-				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(i), ty.span()));
+				let ident = ident.unwrap_or_else(|| Ident::new(Buffer::new().format(index), ty.span()));
 				let ident_string = ident.to_string();
 
 				let get = if ident_string.starts_with(|c: char| c.is_ascii_digit()) {
@@ -683,7 +684,7 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 				let set = Ident::new(&format!("set_{ident_string}"), ident.span());
 				let insert = Ident::new(&format!("insert_{ident_string}"), ident.span());
 
-				let name = make_name("field", &ident, names, errors);
+				let name = make_name("field", &ident,index, names, errors);
 
 				quote_spanned! {ty.span().resolved_at(Span::mixed_site())=>
 					#(#attrs)*
@@ -731,13 +732,40 @@ fn process_union(union: ItemUnion, args: &Args, errors: &mut Vec<Error>) -> Proc
 	}
 }
 
-fn make_name(name_kind: &str, ident: &Ident, names: &Expr, errors: &mut Vec<Error>) -> Expr {
+fn make_name(
+	name_kind: &str,
+	ident: &Ident,
+	index: usize,
+	names: &Expr,
+	errors: &mut Vec<Error>,
+) -> Expr {
 	struct NameVisitor<'a> {
 		name_kind: &'a str,
 		ident: &'a Ident,
+		index: usize,
 		errors: &'a mut Vec<Error>,
 	}
 	impl VisitMut for NameVisitor<'_> {
+		fn visit_expr_mut(&mut self, i: &mut Expr) {
+			match i {
+				Expr::Path(ExprPath {
+					attrs,
+					qself: None,
+					path,
+				}) if path
+					.get_ident()
+					.map(|ident| ident == "index")
+					.unwrap_or_default() =>
+				{
+					*i = Expr::Lit(ExprLit {
+						attrs: attrs.clone(),
+						lit: Lit::Int(LitInt::new(&self.index.to_string(), self.ident.span())),
+					});
+				}
+				_ => syn::visit_mut::visit_expr_mut(self, i),
+			}
+		}
+
 		fn visit_lit_str_mut(&mut self, i: &mut syn::LitStr) {
 			let name = self.ident.to_string();
 			*i = LitStr::new(
@@ -809,6 +837,7 @@ Replaced identifiers are: `kebab_case`, `lowerCamelCase`, `PascalCase`, `SHOUTY_
 	NameVisitor {
 		name_kind,
 		ident,
+		index,
 		errors,
 	}
 	.visit_expr_mut(&mut name);

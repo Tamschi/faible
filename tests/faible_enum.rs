@@ -7,6 +7,9 @@ pub enum Value {
 	#[faible(_, name = "_null")]
 	Null,
 
+	#[faible(_, name = "_none")]
+	None(),
+
 	#[faible(_, name = "_bool")]
 	Bool(bool),
 

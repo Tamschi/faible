@@ -601,7 +601,8 @@ fn process_enum(enum_: ItemEnum, args: &Args, errors: &mut Vec<Error>) -> Proces
 
 				#({
 					let descriptor = &#variant_descriptors;
-					if let ::core::option::Option::Some(mut common) = #faible::VariantFilter::common_mut(descriptor, strong, #variant_names)? {
+					if #faible::VariantFilter::check_mut(descriptor, strong, #variant_names)? {
+						let mut common = #faible::VariantFilter::common_mut(descriptor, strong, #variant_names)?;
 						return Ok(#mut_ty::#variant_idents {
 							#(#variant_field_muts,)*
 						});

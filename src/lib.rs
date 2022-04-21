@@ -202,7 +202,9 @@ pub trait VariantFilter<'a, Strong: ?Sized, E, N> {
 	type CommonMut: 'a;
 
 	fn common(&self, strong: &'a Strong, name: N) -> Result<Option<Self::CommonRef>, E>;
-	fn common_mut(&self, strong: &'a mut Strong, name: N) -> Result<Option<Self::CommonMut>, E>;
+
+	fn check_mut(&self, strong: &mut Strong, name: N) -> Result<bool, E>;
+	fn common_mut(&self, strong: &'a mut Strong, name: N) -> Result<Self::CommonMut, E>;
 }
 // impl<Strong: ?Sized, E, N, T> VariantFilter<Strong, E, N> for &T
 // where
@@ -212,10 +214,10 @@ pub trait VariantFilter<'a, Strong: ?Sized, E, N> {
 // 		T::predicate(self, strong, name)
 // 	}
 // }
-pub trait VariantFieldAccessRef<'a, Common: 'a + ?Sized, E, T: ?Sized, N> {
+pub trait VariantFieldAccessRef<'a, Common: ?Sized, E, T: ?Sized, N> {
 	fn get(&self, common: &Common, name: N) -> Result<&'a T, E>;
 }
-pub trait VariantFieldAccessMut<'a, Common: 'a + ?Sized, E, T: ?Sized, N> {
+pub trait VariantFieldAccessMut<'a, Common: ?Sized, E, T: ?Sized, N> {
 	fn get_mut(&self, strong: &mut Common, name: N) -> Result<&'a mut T, E>;
 }
 //TODO: Get owned, set and insert. Also to-owned conversions.

@@ -80,7 +80,11 @@ impl<'a, Strong: 'a, E, N> VariantFilter<'a, Strong, E, N> for ValueDescriptor {
 		Ok(Some(strong))
 	}
 
-	fn common_mut(&self, strong: &'a mut Strong, name: N) -> Result<Option<Self::CommonMut>, E> {
+	fn check_mut(&self, strong: &mut Strong, name: N) -> Result<bool, E> {
+		unimplemented!()
+	}
+
+	fn common_mut(&self, strong: &'a mut Strong, name: N) -> Result<Self::CommonMut, E> {
 		unimplemented!()
 	}
 }

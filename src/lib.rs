@@ -218,6 +218,6 @@ pub trait VariantFieldAccessRef<'a, Common: ?Sized, E, T: ?Sized, N> {
 	fn get(&self, common: &Common, name: N) -> Result<&'a T, E>;
 }
 pub trait VariantFieldAccessMut<'a, Common: ?Sized, E, T: ?Sized, N> {
-	fn get_mut(&self, strong: &mut Common, name: N) -> Result<&'a mut T, E>;
+	fn get_mut(&self, common: &mut Common, name: N) -> Result<&'a mut T, E>;
 }
 //TODO: Get owned, set and insert. Also to-owned conversions.
